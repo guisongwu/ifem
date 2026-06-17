@@ -23,8 +23,8 @@ errH1 = zeros(maxIt,1);
 erruIuh = zeros(maxIt,1);
 
 %% Generate an initial mesh 
-% [node,elem] = squaremesh([0 1 0 1], 0.25);
-load fourholes.mat
+[node,elem] = squaremesh([0 1 0 1], 0.25);
+% load fourholes.mat
 % bdFlag = setboundary(node,elem,'Dirichlet','~(x==0)','Neumann','x==0');
 bdFlag = setboundary(node,elem,'Dirichlet','all','Neumann','y==1');
 % bdFlag = setboundary(node,elem,'Neumann');

@@ -29,18 +29,18 @@ pde = sincosdata;
 mesh.bdFlag = setboundary(node,elem,'Dirichlet','~(x==0)','Neumann','x==0');
 femPoisson(mesh,pde,option);
 
-%% Pure Neumann boundary condition.
-option.plotflag = 0;
-% pde = sincosNeumanndata;
-pde = sincosdata;
-mesh.bdFlag = setboundary(node,elem,'Neumann');
-femPoisson(mesh,pde,option);
+% %% Pure Neumann boundary condition.
+% option.plotflag = 0;
+% % pde = sincosNeumanndata;
+% pde = sincosdata;
+% mesh.bdFlag = setboundary(node,elem,'Neumann');
+% femPoisson(mesh,pde,option);
 
-%% Pure Robin boundary condition.
-option.plotflag = 0;
-pde = sincosRobindata;
-mesh.bdFlag = setboundary(node,elem,'Robin');
-femPoisson(mesh,pde,option);
+% %% Pure Robin boundary condition.
+% option.plotflag = 0;
+% pde = sincosRobindata;
+% mesh.bdFlag = setboundary(node,elem,'Robin');
+% femPoisson(mesh,pde,option);
 
 %% Conclusion
 %

@@ -1,5 +1,5 @@
 function pde = sincosdata
-%% SINCOSDATA trigonometric  data for Poisson equation
+%% SINCOSDATA trigonometric data for Poisson equation
 %
 %     f = 2*pi^2*cos(pi*x)*cos(pi*y);
 %     u = cos(pi*x)*cos(pi*y);
