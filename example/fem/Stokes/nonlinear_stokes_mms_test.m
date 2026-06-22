@@ -8,7 +8,7 @@ H = 1;
 slope = 0.1;
 % A moderate regularization keeps the manufactured viscosity smooth.
 % The physical demo can still use the smaller value 1e-4.
-eps_reg = 1e-1;
+eps_reg = 1e-2;
 hlist = [1/4;1/8;1/16];
 nlevel = length(hlist);
 
