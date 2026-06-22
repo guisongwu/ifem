@@ -45,6 +45,7 @@ option = setoption(option,'damping',0.7);
 option = setoption(option,'eps_reg',1e-8);
 option = setoption(option,'quadorder',4);
 option = setoption(option,'printlevel',1);
+option = setoption(option,'assemble_tangent',false);
 
 if ~isfield(pde,'A'), pde.A = 1; end
 if ~isfield(pde,'n'), pde.n = 3; end
@@ -135,6 +136,17 @@ eqn.edge = edge;
 eqn.elem2dof = elem2dof;
 eqn.bedDof = bedDof;
 eqn.bedNormal = bedNormal;
+
+if option.assemble_tangent
+    % Consistent Jacobian of the converged nonlinear residual.  It is
+    % required by incremental-state and adjoint equations; the Picard
+    % matrix K+Kb omits derivatives of viscosity and sliding coefficient.
+    Kt = assembleviscoustangent(u);
+    Kbt = assemblebedtangent(u);
+    tangentM = [Kt+Kbt, B'; B, sparse(Np,Np)];
+    eqn.tangent = [tangentM, C'; C, sparse(nConstraint,nConstraint)];
+    eqn.applyBetaDerivative = @assemblebetadirection;
+end
 
     function [K,etaMin,etaMax] = assembleviscous(uk)
         [lambda,w] = quadpts(option.quadorder);
@@ -247,6 +259,147 @@ eqn.bedNormal = bedNormal;
             end
         end
         Kb = sparse(double(ii),double(jj),ss,2*Nu,2*Nu);
+    end
+
+    function Kt = assembleviscoustangent(uk)
+        [lambda,w] = quadpts(option.quadorder);
+        nq = size(lambda,1);
+        rows = zeros(nq*144*NT,1);
+        cols = zeros(nq*144*NT,1);
+        vals = zeros(nq*144*NT,1);
+        cursor = 0;
+        ux = uk(1:Nu);
+        uz = uk(Nu+1:end);
+
+        for q = 1:nq
+            Dphi = p2gradient(lambda(q,:),Dlambda);
+            duxdx = sum(Dphi(:,1,:).*reshape(ux(elem2dof),NT,1,6),3);
+            duxdz = sum(Dphi(:,2,:).*reshape(ux(elem2dof),NT,1,6),3);
+            duzdx = sum(Dphi(:,1,:).*reshape(uz(elem2dof),NT,1,6),3);
+            duzdz = sum(Dphi(:,2,:).*reshape(uz(elem2dof),NT,1,6),3);
+            exx = duxdx;
+            ezz = duzdz;
+            exz = 0.5*(duxdz+duzdx);
+            epsII = 0.5*(exx.^2+ezz.^2+2*exz.^2);
+            xq = lambda(q,1)*node(elem(:,1),:) + ...
+                 lambda(q,2)*node(elem(:,2),:) + ...
+                 lambda(q,3)*node(elem(:,3),:);
+            Aq = coefficient(pde.A,xq);
+            nqfield = coefficient(pde.n,xq);
+            strainRegularized = epsII+option.eps_reg^2;
+            exponent = (1-nqfield)./(2*nqfield);
+            eta = 0.5.*Aq.^(-1./nqfield).*...
+                strainRegularized.^exponent;
+
+            localDof = [elem2dof,Nu+elem2dof];
+            for a = 1:12
+                [aComp,aBasis] = splitlocal(a);
+                [aExx,aEzz,aExz] = basisstrain(aComp,Dphi,aBasis);
+                stateDotA = exx.*aExx+ezz.*aEzz+2*exz.*aExz;
+                for b = 1:12
+                    [bComp,bBasis] = splitlocal(b);
+                    [bExx,bEzz,bExz] = basisstrain(bComp,Dphi,bBasis);
+                    stateDotB = exx.*bExx+ezz.*bEzz+2*exz.*bExz;
+                    strainDot = aExx.*bExx+aEzz.*bEzz+...
+                        2*aExz.*bExz;
+                    kab = 2*w(q)*area.*eta.*...
+                        (strainDot+exponent./strainRegularized.*...
+                         stateDotA.*stateDotB);
+                    idx = cursor+(1:NT);
+                    rows(idx) = localDof(:,a);
+                    cols(idx) = localDof(:,b);
+                    vals(idx) = kab;
+                    cursor = cursor+NT;
+                end
+            end
+        end
+        Kt = sparse(rows,cols,vals,2*Nu,2*Nu);
+    end
+
+    function Kbt = assemblebedtangent(uk)
+        Kbt = sparse(2*Nu,2*Nu);
+        if isempty(bedEdgeIdx), return; end
+        [lbd,wbd] = quadpts1(6);
+        bed = edge(bedEdgeIdx,:);
+        bedLocalDof = [bed,N+bedEdgeIdx];
+        tangent = node(bed(:,2),:)-node(bed(:,1),:);
+        edgeLength = sqrt(sum(tangent.^2,2));
+        tangent = tangent./edgeLength;
+        ubx = uk(bedLocalDof);
+        ubz = uk(Nu+bedLocalDof);
+        ii = [];
+        jj = [];
+        ss = [];
+        exponent = (pde.m-1)/2;
+
+        for q = 1:size(lbd,1)
+            phi = [(2*lbd(q,1)-1)*lbd(q,1),...
+                   (2*lbd(q,2)-1)*lbd(q,2),...
+                   4*lbd(q,1)*lbd(q,2)];
+            xq = lbd(q,1)*node(bed(:,1),:)+...
+                 lbd(q,2)*node(bed(:,2),:);
+            beta = coefficient(pde.beta,xq);
+            ut = sum((ubx*phi').*tangent(:,1)+...
+                     (ubz*phi').*tangent(:,2),2);
+            speedRegularized = ut.^2+option.eps_reg^2;
+            tangentCoefficient = beta.*...
+                (speedRegularized.^exponent+...
+                 (pde.m-1)*ut.^2.*speedRegularized.^(exponent-1));
+            for a = 1:3
+                ia = bedLocalDof(:,a);
+                for b = 1:3
+                    ib = bedLocalDof(:,b);
+                    s = wbd(q)*edgeLength.*tangentCoefficient*...
+                        phi(a)*phi(b);
+                    ii = [ii;ia;ia;Nu+ia;Nu+ia]; %#ok<AGROW>
+                    jj = [jj;ib;Nu+ib;ib;Nu+ib]; %#ok<AGROW>
+                    ss = [ss;s.*tangent(:,1).^2;...
+                        s.*tangent(:,1).*tangent(:,2);...
+                        s.*tangent(:,2).*tangent(:,1);...
+                        s.*tangent(:,2).^2]; %#ok<AGROW>
+                end
+            end
+        end
+        Kbt = sparse(double(ii),double(jj),ss,2*Nu,2*Nu);
+    end
+
+    function load = assemblebetadirection(betaDirection)
+        % Derivative of the nonlinear residual for a supplied delta-beta.
+        load = zeros(2*Nu+Np+nConstraint,1);
+        if isempty(bedEdgeIdx), return; end
+        [lbd,wbd] = quadpts1(6);
+        bed = edge(bedEdgeIdx,:);
+        bedLocalDof = [bed,N+bedEdgeIdx];
+        tangent = node(bed(:,2),:)-node(bed(:,1),:);
+        edgeLength = sqrt(sum(tangent.^2,2));
+        tangent = tangent./edgeLength;
+        ubx = u(bedLocalDof);
+        ubz = u(Nu+bedLocalDof);
+        exponent = (pde.m-1)/2;
+
+        for q = 1:size(lbd,1)
+            phi = [(2*lbd(q,1)-1)*lbd(q,1),...
+                   (2*lbd(q,2)-1)*lbd(q,2),...
+                   4*lbd(q,1)*lbd(q,2)];
+            xq = lbd(q,1)*node(bed(:,1),:)+...
+                 lbd(q,2)*node(bed(:,2),:);
+            deltaBeta = coefficient(betaDirection,xq);
+            ut = sum((ubx*phi').*tangent(:,1)+...
+                     (ubz*phi').*tangent(:,2),2);
+            tractionDirection = deltaBeta.*...
+                (ut.^2+option.eps_reg^2).^exponent.*ut;
+            for a = 1:3
+                contribution = wbd(q)*edgeLength.*...
+                    tractionDirection*phi(a);
+                ia = bedLocalDof(:,a);
+                load(1:2*Nu) = load(1:2*Nu)+...
+                    accumarray(ia,contribution.*tangent(:,1),...
+                               [2*Nu,1]);
+                load(1:2*Nu) = load(1:2*Nu)+...
+                    accumarray(Nu+ia,contribution.*tangent(:,2),...
+                               [2*Nu,1]);
+            end
+        end
     end
 
     function F = assembleforce
