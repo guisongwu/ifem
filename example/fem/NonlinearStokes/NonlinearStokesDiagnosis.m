@@ -25,9 +25,13 @@ topDof = find(abs(uNode(:,2)-surfaceLevel)<tolGeometry ...
             & uNode(:,1)<L-tolGeometry);
 [~,order] = sort(uNode(topDof,1));
 topDof = topDof(order);
+xObs = uNode(topDof,1);
+topWeight = boundaryweights(xObs,L,slope);
 
-Nm = 4;
-xBeta = (0:Nm-1)'*L/Nm;
+Nm = round(L/h);
+assert(abs(Nm*h-L) <= 100*eps(max(1,L)),...
+    'The parameter grid requires L/h to be an integer.');
+xBeta = (0:Nm-1)'*h;
 betaTrue = 1+0.1*cos(2*pi*xBeta/L);
 betaInitial = betaTrue+0.1*(sin(2*pi*xBeta/L)+0.25);
 qTrue = log(betaTrue);
@@ -35,7 +39,7 @@ qInitial = log(betaInitial);
 
 pdeBase = struct;
 pdeBase.A = 1;
-pdeBase.m = 1;
+pdeBase.m = 1/3;
 pdeBase.rho = 1;
 pdeBase.gravity = [0,-1];
 pdeBase.g_N = [];
@@ -48,11 +52,11 @@ option.tol = 1e-11;
 option.damping = 0.8;
 option.printlevel = 0;
 option.quadorder = 6;
+option.assemble_tangent = false;
 
-inverseOption.maxIt = 8;
-inverseOption.fdStep = 1e-2;
+inverseOption.maxIt = 10;
+inverseOption.fdStep = 1e-3;
 inverseOption.lambda = 1e-7;
-inverseOption.alpha = 1e-8;
 inverseOption.stepTolerance = 1e-7;
 
 nList = [1,3];
@@ -67,14 +71,14 @@ for experiment = 1:numel(nList)
         node,elem,bdFlag,xBeta,L);
     assert(trueInfo.converged,'Truth solve failed for n=%g.',pde.n);
     dataObs = uTrue(topDof);
-    dataScale = max(norm(dataObs)/sqrt(numel(dataObs)),eps);
+    dataNormSquared = max(topWeight'*(dataObs.^2),eps);
 
     [uInitial,initialInfo] = solveforward(qInitial,[],pde,option,...
         node,elem,bdFlag,xBeta,L);
     assert(initialInfo.converged,'Initial solve failed for n=%g.',pde.n);
     [JInitial,fdInfo] = finiteDifferenceJacobian(qInitial,uInitial,...
-        pde,option,node,elem,bdFlag,xBeta,L,topDof,dataScale,...
-        inverseOption.fdStep);
+        pde,option,node,elem,bdFlag,xBeta,L,topDof,topWeight,...
+        dataNormSquared,inverseOption.fdStep);
     assert(all(fdInfo),'A perturbed solve failed for n=%g.',pde.n);
 
     [~,S,V] = svd(JInitial,'econ');
@@ -86,7 +90,8 @@ for experiment = 1:numel(nList)
     fprintf('initial relative beta error: %.6e\n',...
         norm(betaInitial-betaTrue)/norm(betaTrue));
     fprintf('initial normalized data residual: %.6e\n',...
-        norm((uInitial(topDof)-dataObs)/dataScale));
+        sqrt((topWeight'*((uInitial(topDof)-dataObs).^2))/...
+        dataNormSquared));
     fprintf('singular values:\n');
     fprintf('  %.12e\n',singularValues);
     fprintf('condition(J): %.6e\n',...
@@ -97,8 +102,8 @@ for experiment = 1:numel(nList)
     fprintf('  %.12e\n',observableContribution);
 
     [qRecovered,history,JFinal] = invertparameter(qInitial,qTrue,dataObs,...
-        dataScale,pde,option,inverseOption,node,elem,bdFlag,...
-        xBeta,L,topDof);
+        topWeight,dataNormSquared,pde,option,inverseOption,node,elem,...
+        bdFlag,xBeta,L,topDof);
 
     result(experiment).n = pde.n;
     result(experiment).singularValuesInitial = singularValues;
@@ -147,12 +152,10 @@ xlabel('inverse iteration');
 ylabel('relative beta error');
 legend('Location','best');
 
-function [q,history,J] = invertparameter(q,qTrue,dataObs,dataScale,pde,...
-        option,inverseOption,node,elem,bdFlag,xBeta,L,topDof)
+function [q,history,J] = invertparameter(q,qTrue,dataObs,topWeight,...
+        dataNormSquared,pde,option,inverseOption,node,elem,bdFlag,...
+        xBeta,L,topDof)
     Nm = numel(q);
-    D = spdiags([-ones(Nm,1),ones(Nm,1)],[0,1],Nm,Nm);
-    D(Nm,1) = 1;
-    qReference = q;
     lambda = inverseOption.lambda;
     uWarm = [];
 
@@ -164,10 +167,9 @@ function [q,history,J] = invertparameter(q,qTrue,dataObs,dataScale,pde,...
             node,elem,bdFlag,xBeta,L);
         assert(info.converged,'Forward solve failed in iteration %d.',k);
         uWarm = u;
-        residual = (u(topDof)-dataObs)/dataScale;
-        regularization = D*(q-qReference);
-        objective = 0.5*(residual'*residual) ...
-            + 0.5*inverseOption.alpha*(regularization'*regularization);
+        residual = sqrt(topWeight/dataNormSquared).*...
+            (u(topDof)-dataObs);
+        objective = 0.5*(residual'*residual);
 
         history.objective(k) = objective;
         history.dataResidual(k) = norm(residual);
@@ -175,14 +177,12 @@ function [q,history,J] = invertparameter(q,qTrue,dataObs,dataScale,pde,...
             norm(exp(qTrue));
 
         [J,fdConverged] = finiteDifferenceJacobian(q,u,pde,option,...
-            node,elem,bdFlag,xBeta,L,topDof,dataScale,...
-            inverseOption.fdStep);
+            node,elem,bdFlag,xBeta,L,topDof,topWeight,...
+            dataNormSquared,inverseOption.fdStep);
         assert(all(fdConverged),'A finite-difference solve failed.');
 
-        gradient = J'*residual ...
-            + inverseOption.alpha*(D'*(D*(q-qReference)));
-        normalMatrix = J'*J+inverseOption.alpha*(D'*D) ...
-            + lambda*speye(Nm);
+        gradient = J'*residual;
+        normalMatrix = J'*J+lambda*speye(Nm);
         step = -normalMatrix\gradient;
 
         fprintf(['iteration %2d: objective %.6e, data residual %.6e, ',...
@@ -203,11 +203,9 @@ function [q,history,J] = invertparameter(q,qTrue,dataObs,dataScale,pde,...
             [uTrial,trialInfo] = solveforward(qTrial,u,pde,option,...
                 node,elem,bdFlag,xBeta,L);
             if trialInfo.converged
-                trialResidual = (uTrial(topDof)-dataObs)/dataScale;
-                trialRegularization = D*(qTrial-qReference);
-                trialObjective = 0.5*(trialResidual'*trialResidual) ...
-                    + 0.5*inverseOption.alpha*...
-                    (trialRegularization'*trialRegularization);
+                trialResidual = sqrt(topWeight/dataNormSquared).*...
+                    (uTrial(topDof)-dataObs);
+                trialObjective = 0.5*(trialResidual'*trialResidual);
                 if trialObjective < objective
                     q = qTrial;
                     uWarm = uTrial;
@@ -225,18 +223,21 @@ function [q,history,J] = invertparameter(q,qTrue,dataObs,dataScale,pde,...
 end
 
 function [J,converged] = finiteDifferenceJacobian(q,u,pde,option,...
-        node,elem,bdFlag,xBeta,L,topDof,dataScale,fdStep)
+        node,elem,bdFlag,xBeta,L,topDof,topWeight,dataNormSquared,...
+        fdStep)
     Nm = numel(q);
     J = zeros(numel(topDof),Nm);
     converged = false(Nm,1);
     prediction = u(topDof);
+    observationWeight = sqrt(topWeight/dataNormSquared);
     for j = 1:Nm
         qPerturbed = q;
         qPerturbed(j) = qPerturbed(j)+fdStep;
         [uPerturbed,info] = solveforward(qPerturbed,u,pde,option,...
             node,elem,bdFlag,xBeta,L);
         converged(j) = info.converged;
-        J(:,j) = (uPerturbed(topDof)-prediction)/(fdStep*dataScale);
+        J(:,j) = observationWeight.*...
+            (uPerturbed(topDof)-prediction)/fdStep;
     end
 end
 
@@ -260,4 +261,10 @@ function value = periodicP1(x,xNode,nodalValue,L)
     xWrapped = mod(x,L);
     value = interp1([xNode;L],[nodalValue;nodalValue(1)],...
         xWrapped,'linear');
+end
+
+function weight = boundaryweights(xObs,L,slope)
+    nObs = numel(xObs);
+    assert(nObs > 0,'No top-boundary observation dofs were found.');
+    weight = sqrt(1+slope^2)*(L/nObs)*ones(nObs,1);
 end

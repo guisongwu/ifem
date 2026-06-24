@@ -24,7 +24,9 @@ slope = 0.1;
 h = 1/8;
 
 [node,elem] = squaremesh([0,L,0,H],h);
-bdFlag = setboundary(node,elem,'Neumann','y==0.5','Robin','y==0');
+topBoundaryExpression = sprintf('y==%.17g',H);
+bdFlag = setboundary(node,elem,'Neumann',topBoundaryExpression,...
+    'Robin','y==0');
 node(:,2) = node(:,2)-slope*node(:,1);
 
 [~,edge] = dofP2(elem);
@@ -33,6 +35,8 @@ Nu = N+size(edge,1); %#ok<NASGU>
 uNode = [node;(node(edge(:,1),:)+node(edge(:,2),:))/2];
 surfaceLevel = H-slope*uNode(:,1);
 tolGeometry = 100*eps(max(1,max(abs(node(:)))));
+% Use all P2 velocity dofs on the top boundary as observations.  The right
+% endpoint is skipped because it is identified with x=0 by periodicity.
 topDof = find(abs(uNode(:,2)-surfaceLevel)<tolGeometry ...
             & uNode(:,1)<L-tolGeometry);
 [~,order] = sort(uNode(topDof,1));
@@ -57,6 +61,8 @@ option.tol = 1e-11;
 option.damping = 0.8;
 option.printlevel = 0;
 option.quadorder = 6;
+% The adjoint and incremental equations use the consistent nonlinear
+% Jacobian assembled after the Picard forward solve.
 option.assemble_tangent = true;
 
 %% Periodic P1 parameterization
@@ -70,6 +76,8 @@ qTrue = log(betaTrue);
 q = log(betaInitial);
 
 %% Synthetic surface observation
+% This is an inverse-crime style check: generate exact data from qTrue on
+% the same mesh, then try to recover q from only top-boundary velocities.
 [uTrue,~,trueInfo] = solveforward(qTrue,[],pde,option,...
     node,elem,bdFlag,xBeta,L);
 assert(trueInfo.converged,'The truth solve did not converge.');
@@ -93,12 +101,17 @@ history.gradientNorm = NaN(maxInverseIt,1);
 history.picardSteps = NaN(maxInverseIt,1);
 derivativeCheck = struct('stateError',NaN,'gradientError',NaN,...
     'gaussNewtonError',NaN,'finiteDifference',NaN,...
-    'adjointDirection',NaN);
+    'adjointDirection',NaN,'forwardSolves',0);
 
 uWarm = [];
+optimizationForwardSolves = 0;
+printiterationheader();
 for k = 1:maxInverseIt
+    % Main nonlinear state solve for the current parameter.  uWarm carries
+    % the last accepted state and usually reduces the Picard iteration count.
     [u,eqn,forwardInfo] = solveforward(q,uWarm,pde,option,...
         node,elem,bdFlag,xBeta,L);
+    optimizationForwardSolves = optimizationForwardSolves+1;
     assert(forwardInfo.converged,...
         'Forward solve failed at inverse iteration %d.',k);
     uWarm = u;
@@ -107,7 +120,13 @@ for k = 1:maxInverseIt
     dataObjective = 0.5*(topWeight'*(residual.^2))/dataNormSquared;
     objective = dataObjective;
 
+    % G is R_q, the derivative of the nonlinear residual with respect to
+    % q=log(beta).  The chain rule delta beta = beta * delta q is applied
+    % inside assembleparameterderivative.
     G = assembleparameterderivative(eqn,q,xBeta,L,Nm);
+
+    % J_U is nonzero only at observed top velocity dofs.  The adjoint solve
+    % uses the transposed consistent tangent: R_U' * adjoint = -J_U.
     observationGradient = zeros(size(eqn.tangent,1),1);
     observationGradient(topDof) = topWeight.*residual/dataNormSquared;
     adjoint = eqn.tangent'\(-observationGradient);
@@ -124,47 +143,54 @@ for k = 1:maxInverseIt
     history.gradientNorm(k) = norm(gradient);
     history.picardSteps(k) = forwardInfo.itStep;
 
-    fprintf(['boundary inverse %2d: objective %.6e, ',...
-             'beta L2 rel %.6e, beta Linf abs %.6e, ',...
-             'beta Linf rel %.6e, |gradient| %.6e, Picard %d\n'],...
-        k,objective,history.parameterError(k),...
-        history.parameterErrorLinf(k),...
-        history.parameterErrorRelativeLinf(k),norm(gradient),...
-        forwardInfo.itStep);
-
     if k == 1
         derivativeCheck = verifyderivatives(...
             q,u,eqn,G,gradient,dataObs,topWeight,dataNormSquared,...
             pde,option,node,elem,bdFlag,xBeta,L,topDof);
+        optimizationForwardSolves = optimizationForwardSolves+...
+            derivativeCheck.forwardSolves;
     end
 
     if norm(gradient) <= gradientTolerance
+        printiterationrow(k,objective,history.parameterError(k),...
+            history.parameterErrorLinf(k),...
+            history.parameterErrorRelativeLinf(k),norm(gradient),...
+            forwardInfo.itStep,NaN,NaN,0,'grad');
         history = trimhistory(history,k);
         break
     end
 
     hessian = @(direction) gaussnewtonproduct(direction,eqn,G,...
         topDof,topWeight,dataNormSquared,lambda);
+    % PCG only needs Hessian-vector products.  gaussnewtonproduct applies
+    % the matrix-free GN Hessian plus the LM damping lambda*I.
     [step,flag,relativeResidual,pcgIt] = pcg(...
         hessian,-gradient,pcgTolerance,pcgMaxIt);
-    fprintf('  PCG flag %d, iteration %d, relative residual %.3e\n',...
-        flag,pcgIt,relativeResidual);
     if flag ~= 0
         warning('iFEM:NonlinearAdjointPCG',...
             'PCG did not reach the requested tolerance.');
     end
 
     if norm(step) <= stepTolerance*max(1,norm(q))
+        printiterationrow(k,objective,history.parameterError(k),...
+            history.parameterErrorLinf(k),...
+            history.parameterErrorRelativeLinf(k),norm(gradient),...
+            forwardInfo.itStep,pcgIt,relativeResidual,0,'step');
         history = trimhistory(history,k);
         break
     end
 
     accepted = false;
     stepLength = 1;
+    lineSearchCount = 0;
     for lineSearchIt = 1:10
+        lineSearchCount = lineSearchCount+1;
         qTrial = q+stepLength*step;
+        % Every trial step requires a nonlinear forward solve.  These solves
+        % are counted separately in optimizationForwardSolves.
         [uTrial,~,trialInfo] = solveforward(qTrial,u,pde,option,...
             node,elem,bdFlag,xBeta,L);
+        optimizationForwardSolves = optimizationForwardSolves+1;
         if trialInfo.converged
             trialResidual = uTrial(topDof)-dataObs;
             trialObjective = 0.5*(topWeight'*(trialResidual.^2)) ...
@@ -186,6 +212,11 @@ for k = 1:maxInverseIt
             'No decreasing step was found; increasing LM damping.');
     end
 
+    printiterationrow(k,objective,history.parameterError(k),...
+        history.parameterErrorLinf(k),...
+        history.parameterErrorRelativeLinf(k),norm(gradient),...
+        forwardInfo.itStep,pcgIt,relativeResidual,lineSearchCount,'');
+
     if k == maxInverseIt
         history = trimhistory(history,k);
     end
@@ -194,8 +225,16 @@ end
 betaRecovered = exp(q);
 betaErrorLinf = norm(betaRecovered-betaTrue,inf);
 betaErrorRelativeLinf = betaErrorLinf/norm(betaTrue,inf);
-fprintf('final beta Linf error %.6e, relative Linf %.6e\n',...
+fprintf('\nSummary\n');
+fprintf('  optimization forward solves: %d\n',...
+    optimizationForwardSolves);
+fprintf('  final beta Linf error: %.04e, relative Linf: %.04e\n',...
     betaErrorLinf,betaErrorRelativeLinf);
+fprintf(['  derivative check: state %.04e, grad %.04e, GN %.04e ',...
+         '(FD %.04e, adj %.04e)\n'],...
+    derivativeCheck.stateError,derivativeCheck.gradientError,...
+    derivativeCheck.gaussNewtonError,derivativeCheck.finiteDifference,...
+    derivativeCheck.adjointDirection);
 
 figure(1);
 set(gcf,'Visible','on');
@@ -290,18 +329,59 @@ colorbar;
 title('recovered pressure','FontSize',14);
 drawnow;
 
+function printiterationheader()
+    fprintf('\n');
+    fprintf([' it    objective    betaL2rel  betaLinfAbs ',...
+             'betaLinfRel       |grad| fPicard pcgIt     pcgRel ls stop\n']);
+    fprintf(['--- ------------ ------------ ------------ ',...
+             '----------- ------------ ------- ----- ---------- -- ----\n']);
+end
+
+function printiterationrow(k,objective,betaL2Rel,betaLinfAbs,...
+        betaLinfRel,gradientNorm,forwardPicard,pcgIt,pcgRel,...
+        lineSearchCount,stopReason)
+    if isnan(pcgIt)
+        pcgItText = '    -';
+    else
+        pcgItText = sprintf('%5d',pcgIt);
+    end
+    if isnan(pcgRel)
+        pcgRelText = '         -';
+    else
+        pcgRelText = sprintf('%10.04e',pcgRel);
+    end
+    if isempty(stopReason)
+        stopReason = '-';
+    end
+    fprintf(['%3d %12.04e %12.04e %12.04e %11.04e ',...
+             '%12.04e %7d %s %s %2d %s\n'],...
+        k,objective,betaL2Rel,betaLinfAbs,betaLinfRel,...
+        gradientNorm,forwardPicard,pcgItText,pcgRelText,...
+        lineSearchCount,stopReason);
+end
+
 function product = gaussnewtonproduct(direction,eqn,G,topDof,...
         topWeight,dataNormSquared,lambda)
+    % Linearized state equation:
+    %     R_U * deltaU = -R_q * direction.
     incrementalState = eqn.tangent\(-G*direction);
+
+    % Apply the observation Hessian J_uu to deltaU.  Only top-boundary
+    % observed velocity components contribute to the objective.
     incrementalObservation = zeros(size(eqn.tangent,1),1);
     incrementalObservation(topDof) = ...
         topWeight.*incrementalState(topDof)/dataNormSquared;
+
+    % Linearized adjoint equation gives J_obs' * J_obs * direction without
+    % assembling the dense observation Jacobian.
     incrementalAdjoint = eqn.tangent'\(-incrementalObservation);
     product = G'*incrementalAdjoint+lambda*direction;
 end
 
 function check = verifyderivatives(q,u,eqn,G,gradient,dataObs,topWeight,...
         dataNormSquared,pde,option,node,elem,bdFlag,xBeta,L,topDof)
+    % A fixed smooth direction gives a deterministic regression-style check
+    % of the tangent equation, adjoint gradient, and GN quadratic form.
     direction = sin((1:numel(q))');
     direction = direction/norm(direction);
     epsilon = 1e-3;
@@ -340,17 +420,12 @@ function check = verifyderivatives(q,u,eqn,G,gradient,dataObs,topWeight,...
         max([eps,tangentObservation'*tangentObservation,...
              finiteDifferenceObservation'*finiteDifferenceObservation]);
 
-    fprintf(['  derivative check: state %.3e, gradient %.3e, ',...
-             'Gauss-Newton %.3e ',...
-             '(FD %.6e, adjoint %.6e)\n'],...
-        relativeStateError,relativeGradientError,...
-        relativeGaussNewtonError,...
-        finiteDifference,adjointDirection);
     check.stateError = relativeStateError;
     check.gradientError = relativeGradientError;
     check.gaussNewtonError = relativeGaussNewtonError;
     check.finiteDifference = finiteDifference;
     check.adjointDirection = adjointDirection;
+    check.forwardSolves = 2;
 end
 
 function G = assembleparameterderivative(eqn,q,xBeta,L,Nm)
@@ -359,6 +434,8 @@ function G = assembleparameterderivative(eqn,q,xBeta,L,Nm)
     for j = 1:Nm
         direction = zeros(Nm,1);
         direction(j) = 1;
+        % Since beta=exp(q), a unit perturbation in q_j produces
+        % delta beta_j = beta_j.
         deltaBeta = beta.*direction;
         directionFunction = @(pt) periodicP1(...
             pt(:,1),xBeta,deltaBeta,L);
@@ -370,6 +447,8 @@ function [u,eqn,info,p] = solveforward(q,u0,pde,option,...
         node,elem,bdFlag,xBeta,L)
     beta = exp(q(:));
     pde.beta = @(pt) periodicP1(pt(:,1),xBeta,beta,L);
+    % u0 is a warm start for the nonlinear Picard iteration; omit it for
+    % truth solves or the first inverse iteration.
     if isempty(u0)
         if isfield(option,'u0')
             option = rmfield(option,'u0');

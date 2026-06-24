@@ -112,6 +112,9 @@ end
 nConstraint = size(C,1);
 B = Bmatrix;
 
+% Unknown ordering in the augmented system is [ux; uz; p; constraints].
+% constraintMultiplier stores Lagrange multipliers for periodicity,
+% impermeability, and possibly pressure normalization.
 u = zeros(2*Nu,1);
 p = zeros(Np,1);
 constraintMultiplier = zeros(nConstraint,1);
@@ -130,11 +133,15 @@ checkResidualEveryStep = false;
 t0 = cputime;
 
 for k = 1:option.maxIt
+    % Picard step: freeze viscosity and sliding coefficient at the current
+    % velocity, then solve one linear augmented Stokes system.
     [K,etaMin,etaMax] = assembleviscous(u);
     [Kb,bedCoefficient] = assemblebed(u);
     F = assembleforce;
     F = addtraction(F);
 
+    % M is the Stokes block for velocity and pressure.  C adds constraints
+    % such as periodic identification, bed impermeability, and pressure mean.
     M = [K+Kb, B'; B, sparse(Np,Np)];
     rhs = [F; zeros(Np,1)];
     saddle = [M, C'; C, sparse(nConstraint,nConstraint)];
@@ -144,6 +151,7 @@ for k = 1:option.maxIt
     pnew = fullsol(2*Nu+(1:Np));
     multiplierNew = fullsol(2*Nu+Np+(1:nConstraint));
     alpha = option.damping;
+    % Damping improves robustness for the Glen and sliding nonlinearities.
     updatedU = (1-alpha)*u + alpha*unew;
     updatedP = (1-alpha)*p + alpha*pnew;
     updatedMultiplier = (1-alpha)*constraintMultiplier + ...
@@ -158,6 +166,9 @@ for k = 1:option.maxIt
     if residual(k) <= option.residual_check_threshold
         checkResidualEveryStep = true;
     end
+    % The cheap Picard relchange can stagnate before the full nonlinear
+    % residual is small.  Once relchange is modest, check the actual
+    % nonlinear residual every step and require both tests for convergence.
     if checkResidualEveryStep || k == option.maxIt
         [momentumResidual(k),divergenceResidual(k),...
             constraintResidual(k),nonlinearResidual(k),K,Kb,...
@@ -227,6 +238,8 @@ if option.assemble_tangent
 end
 
     function [K,etaMin,etaMax] = assembleviscous(uk)
+        % Picard viscosity matrix: eta is evaluated from uk and treated as
+        % frozen while assembling the bilinear form.
         [lambda,w] = quadpts(option.quadorder);
         nq = size(lambda,1);
         rows = zeros(nq*144*NT,1);
@@ -298,6 +311,8 @@ end
     end
 
     function [Kb,coefAtMid] = assemblebed(uk)
+        % Picard bed matrix for regularized Weertman sliding.  The scalar
+        % coefficient gamma is frozen at the current tangential velocity.
         Kb = sparse(2*Nu,2*Nu);
         coefAtMid = [];
         if isempty(bedEdgeIdx), return; end
@@ -340,6 +355,9 @@ end
     end
 
     function Kt = assembleviscoustangent(uk)
+        % Consistent viscous tangent.  Compared with assembleviscous, this
+        % includes the derivative of eta(eps(u)) with respect to the trial
+        % velocity direction.
         [lambda,w] = quadpts(option.quadorder);
         nq = size(lambda,1);
         rows = zeros(nq*144*NT,1);
@@ -373,6 +391,7 @@ end
             for a = 1:12
                 [aComp,aBasis] = splitlocal(a);
                 [aExx,aEzz,aExz] = basisstrain(aComp,Dphi,aBasis);
+                % stateDotA is d epsII(u)[phi_a]; it appears in d eta.
                 stateDotA = exx.*aExx+ezz.*aEzz+2*exz.*aExz;
                 for b = 1:12
                     [bComp,bBasis] = splitlocal(b);
@@ -380,6 +399,8 @@ end
                     stateDotB = exx.*bExx+ezz.*bEzz+2*exz.*bExz;
                     strainDot = aExx.*bExx+aEzz.*bEzz+...
                         2*aExz.*bExz;
+                    % First term: frozen-viscosity Picard contribution.
+                    % Second term: derivative of viscosity with respect to u.
                     kab = 2*w(q)*area.*eta.*...
                         (strainDot+exponent./strainRegularized.*...
                          stateDotA.*stateDotB);
@@ -395,6 +416,8 @@ end
     end
 
     function Kbt = assemblebedtangent(uk)
+        % Consistent tangent of beta*(ut^2+eps^2)^((m-1)/2)*ut with
+        % respect to the tangential velocity ut.
         Kbt = sparse(2*Nu,2*Nu);
         if isempty(bedEdgeIdx), return; end
         [lbd,wbd] = quadpts1(6);
@@ -420,6 +443,7 @@ end
             ut = sum((ubx*phi').*tangent(:,1)+...
                      (ubz*phi').*tangent(:,2),2);
             speedRegularized = ut.^2+option.eps_reg^2;
+            % d/dut [ beta*(ut^2+eps^2)^exponent*ut ].
             tangentCoefficient = beta.*...
                 (speedRegularized.^exponent+...
                  (pde.m-1)*ut.^2.*speedRegularized.^(exponent-1));
@@ -442,7 +466,9 @@ end
     end
 
     function load = assemblebetadirection(betaDirection)
-        % Derivative of the nonlinear residual for a supplied delta-beta.
+        % Derivative R_beta[delta beta] of the nonlinear residual.  The
+        % adjoint script multiplies q-directions by beta first because
+        % beta=exp(q).
         load = zeros(2*Nu+Np+nConstraint,1);
         if isempty(bedEdgeIdx), return; end
         [lbd,wbd] = quadpts1(6);
@@ -519,6 +545,8 @@ end
     function [momentumValue,divergenceValue,constraintValue,...
             totalValue,Kres,Kbres,etaMinRes,etaMaxRes,bedCoefficientRes] = ...
             evaluateresidual(uk,pk,multiplier)
+        % Evaluate the true nonlinear residual at the damped iterate.  This
+        % is stricter than checking only the Picard update size.
         [Kres,etaMinRes,etaMaxRes] = assembleviscous(uk);
         [Kbres,bedCoefficientRes] = assemblebed(uk);
         Fres = assembleforce;

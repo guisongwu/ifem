@@ -6,21 +6,29 @@
 close all;
 clear variables;
 
-L = 1;
+L = 5;
 H = 1;
 slope = 0.1;
-h = 1/8;
+h = 1/10;
+% betaCase = 'constant';
+% betaCase = 'linear';
+% betaCase = 'quadratic';
+betaCase = 'sin';
+% betaCase = 'cos';
+% betaCase = 'bump';
 epsList = 10.^(-1:-1:-4);
 nStage = length(epsList);
 
 [node,elem] = squaremesh([0,L,0,H],h);
-bdFlag = setboundary(node,elem,'Neumann','y==1','Robin','y==0');
+topBoundaryExpression = sprintf('y==%.17g',H);
+bdFlag = setboundary(node,elem,'Neumann',topBoundaryExpression,...
+    'Robin','y==0');
 node(:,2) = node(:,2)-slope*node(:,1);
 
 pde = struct;
 pde.A = 1;
 pde.n = 3;
-pde.beta = 10;
+pde.beta = makebedbeta(betaCase,L);
 pde.m = 1/3;
 pde.rho = 1;
 pde.gravity = [0,-1];
@@ -74,17 +82,84 @@ disp(result(1:max(1,nCompleted+(nCompleted<nStage)),:));
 
 if nCompleted > 0
     figure(1);
-    showresult(node,elem,soln.p);
-    title(sprintf('Pressure, \\epsilon_{reg} = %.0e',...
+    set(gcf,'Visible','on');
+    clf;
+    subplot(2,2,1);
+    showmesh(node,elem);
+    axis equal;
+    axis tight;
+    title('mesh');
+
+    subplot(2,2,2);
+    trisurf(elem,node(:,1),node(:,2),soln.ux(1:size(node,1)),...
+        'FaceColor','interp','EdgeColor','interp');
+    axis equal;
+    axis tight;
+    colorbar;
+    title(sprintf('horizontal velocity u_x, \\epsilon_{reg}=%.0e',...
         epsList(nCompleted)));
+    view(2);
+
+    subplot(2,2,3);
+    trisurf(elem,node(:,1),node(:,2),soln.uz(1:size(node,1)),...
+        'FaceColor','interp','EdgeColor','interp');
+    axis equal;
+    axis tight;
+    colorbar;
+    title(sprintf('vertical velocity u_z, \\epsilon_{reg}=%.0e',...
+        epsList(nCompleted)));
+    view(2);
+
+    subplot(2,2,4);
+    trisurf(elem,node(:,1),node(:,2),soln.p,...
+        'FaceColor','interp','EdgeColor','interp');
+    axis equal;
+    axis tight;
+    colorbar;
+    title(sprintf('pressure, \\epsilon_{reg}=%.0e',...
+        epsList(nCompleted)));
+    view(2);
 
     figure(2);
-    showresult(node,elem,soln.ux(1:size(node,1)));
-    title(sprintf('Horizontal velocity, \\epsilon_{reg} = %.0e',...
-        epsList(nCompleted)));
+    xPlot = linspace(0,L,401)';
+    bedPoint = [xPlot,-slope*xPlot];
+    betaPlot = evaluatebeta(pde.beta,bedPoint);
+    plot(xPlot,betaPlot,'k-','LineWidth',1.6);
+    grid on;
+    xlabel('x');
+    ylabel('\beta');
+    title(sprintf('bed beta: %s',betaCase));
+end
 
-    figure(3);
-    showresult(node,elem,soln.uz(1:size(node,1)));
-    title(sprintf('Vertical velocity, \\epsilon_{reg} = %.0e',...
-        epsList(nCompleted)));
+function beta = makebedbeta(betaCase,L)
+    switch lower(betaCase)
+        case 'constant'
+            beta = 10;
+        case 'linear'
+            beta = @(pt) 8+4*periodicx(pt(:,1),L)/L;
+        case 'quadratic'
+            x = @(pt) periodicx(pt(:,1),L)/L;
+            beta = @(pt) 8+8*(x(pt)-0.5).^2;
+        case 'sin'
+            beta = @(pt) 10+2*sin(2*pi*periodicx(pt(:,1),L)/L);
+        case 'cos'
+            beta = @(pt) 10+2*cos(2*pi*periodicx(pt(:,1),L)/L);
+        case 'bump'
+            x = @(pt) periodicx(pt(:,1),L)/L;
+            beta = @(pt) 8+5*exp(-((x(pt)-0.5)/0.18).^2);
+        otherwise
+            error('Unknown betaCase: %s.',betaCase);
+    end
+end
+
+function xWrapped = periodicx(x,L)
+    xWrapped = mod(x,L);
+end
+
+function value = evaluatebeta(beta,pt)
+    if isa(beta,'function_handle')
+        value = beta(pt);
+    else
+        value = beta+zeros(size(pt,1),1);
+    end
 end
