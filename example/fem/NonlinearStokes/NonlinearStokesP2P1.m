@@ -1,4 +1,4 @@
-function [soln,eqn,info] = NonlinearStokesP2P1_periodic(node,elem,bdFlag,pde,option)
+function [soln,eqn,info] = NonlinearStokesP2P1(node,elem,bdFlag,pde,option)
 %% NONLINEARSTOKESP2P1_PERIODIC Nonlinear full-Stokes ice-flow model.
 %
 % Solve, in a two-dimensional x-z cross-section,
@@ -31,7 +31,9 @@ function [soln,eqn,info] = NonlinearStokesP2P1_periodic(node,elem,bdFlag,pde,opt
 %
 % Important options:
 %   option.periodic, option.periodic_x, option.tol,
-%   option.maxIt, option.damping, option.eps_reg, option.quadorder.
+%   option.maxIt, option.damping, option.eps_reg, option.quadorder,
+%   option.pressure_constraint ('auto', 'mean-zero', or 'none'),
+%   option.residual_tol, option.residual_check_threshold.
 %
 % The nonlinear iteration is a damped Picard iteration.  The small
 % eps_reg regularizes Glen's singular viscosity at zero strain rate.
@@ -46,6 +48,10 @@ option = setoption(option,'eps_reg',1e-8);
 option = setoption(option,'quadorder',4);
 option = setoption(option,'printlevel',1);
 option = setoption(option,'assemble_tangent',false);
+option = setoption(option,'pressure_constraint','auto');
+option = setoption(option,'residual_tol',option.tol);
+option = setoption(option,'residual_check_threshold',...
+    max(1e-2,sqrt(option.residual_tol)));
 
 if ~isfield(pde,'A'), pde.A = 1; end
 if ~isfield(pde,'n'), pde.n = 3; end
@@ -72,18 +78,55 @@ end
 bedEdgeIdx = find(isBedEdge);
 topEdgeIdx = find(isTopEdge);
 
+hasTractionBoundary = any(bdFlag(:)==2);
+if ~(ischar(option.pressure_constraint) || ...
+        (isstring(option.pressure_constraint) && isscalar(option.pressure_constraint)))
+    error('iFEM:NonlinearStokesPressureConstraint',...
+        'pressure_constraint must be a character vector or scalar string.');
+end
+pressureConstraint = lower(strtrim(char(option.pressure_constraint)));
+switch pressureConstraint
+    case 'auto'
+        addPressureMeanConstraint = ~hasTractionBoundary;
+    case 'mean-zero'
+        addPressureMeanConstraint = true;
+    case 'none'
+        addPressureMeanConstraint = false;
+    otherwise
+        error('iFEM:NonlinearStokesPressureConstraint',...
+            'Unknown pressure_constraint value: %s.',pressureConstraint);
+end
+if ~(isscalar(option.residual_tol) && isfinite(option.residual_tol) && ...
+        option.residual_tol > 0)
+    error('iFEM:NonlinearStokesResidualTolerance',...
+        'residual_tol must be a positive finite scalar.');
+end
+if ~(isscalar(option.residual_check_threshold) && ...
+        isfinite(option.residual_check_threshold) && ...
+        option.residual_check_threshold > 0)
+    error('iFEM:NonlinearStokesResidualThreshold',...
+        'residual_check_threshold must be a positive finite scalar.');
+end
+
 [C,bedDof,bedNormal] = buildconstraints;
 nConstraint = size(C,1);
 B = Bmatrix;
 
 u = zeros(2*Nu,1);
 p = zeros(Np,1);
+constraintMultiplier = zeros(nConstraint,1);
 if isfield(option,'u0') && numel(option.u0) == 2*Nu
     u = option.u0(:);
 end
 
 residual = zeros(option.maxIt,1);
 viscosityRange = zeros(option.maxIt,2);
+momentumResidual = NaN(option.maxIt,1);
+divergenceResidual = NaN(option.maxIt,1);
+constraintResidual = NaN(option.maxIt,1);
+nonlinearResidual = NaN(option.maxIt,1);
+residualChecked = false(option.maxIt,1);
+checkResidualEveryStep = false;
 t0 = cputime;
 
 for k = 1:option.maxIt
@@ -99,20 +142,44 @@ for k = 1:option.maxIt
 
     unew = fullsol(1:2*Nu);
     pnew = fullsol(2*Nu+(1:Np));
+    multiplierNew = fullsol(2*Nu+Np+(1:nConstraint));
     alpha = option.damping;
     updatedU = (1-alpha)*u + alpha*unew;
     updatedP = (1-alpha)*p + alpha*pnew;
+    updatedMultiplier = (1-alpha)*constraintMultiplier + ...
+        alpha*multiplierNew;
 
     residual(k) = norm(updatedU-u)/max(1,norm(updatedU));
     viscosityRange(k,:) = [etaMin,etaMax];
     u = updatedU;
     p = updatedP;
+    constraintMultiplier = updatedMultiplier;
+
+    if residual(k) <= option.residual_check_threshold
+        checkResidualEveryStep = true;
+    end
+    if checkResidualEveryStep || k == option.maxIt
+        [momentumResidual(k),divergenceResidual(k),...
+            constraintResidual(k),nonlinearResidual(k),K,Kb,...
+            etaMin,etaMax,bedCoefficient] = ...
+            evaluateresidual(u,p,constraintMultiplier);
+        viscosityRange(k,:) = [etaMin,etaMax];
+        residualChecked(k) = true;
+    end
 
     if option.printlevel > 0
-        fprintf('nonlinear Stokes %2d: relchange %.3e, eta [%.3e, %.3e]\n',...
-            k,residual(k),etaMin,etaMax);
+        if residualChecked(k)
+            fprintf(['nonlinear Stokes %2d: relchange %.3e, ',...
+                'residual %.3e, eta [%.3e, %.3e]\n'],...
+                k,residual(k),nonlinearResidual(k),etaMin,etaMax);
+        else
+            fprintf(['nonlinear Stokes %2d: relchange %.3e, ',...
+                'eta [%.3e, %.3e]\n'],...
+                k,residual(k),etaMin,etaMax);
+        end
     end
-    if residual(k) < option.tol
+    if residualChecked(k) && residual(k) < option.tol && ...
+            nonlinearResidual(k) < option.residual_tol
         break
     end
 end
@@ -120,9 +187,19 @@ end
 info.itStep = k;
 info.relchange = residual(1:k);
 info.viscosityRange = viscosityRange(1:k,:);
-info.converged = residual(k) < option.tol;
+info.momentumResidual = momentumResidual(1:k);
+info.divergenceResidual = divergenceResidual(1:k);
+info.constraintResidual = constraintResidual(1:k);
+info.nonlinearResidual = nonlinearResidual(1:k);
+info.residualChecked = residualChecked(1:k);
+info.residualTolerance = option.residual_tol;
+info.converged = residualChecked(k) && residual(k) < option.tol && ...
+    nonlinearResidual(k) < option.residual_tol;
 info.solveTime = cputime-t0;
 info.bedCoefficient = bedCoefficient;
+info.pressureConstraint = pressureConstraint;
+info.hasTractionBoundary = hasTractionBoundary;
+info.pressureMeanConstrained = addPressureMeanConstraint;
 
 soln.u = u;
 soln.p = p;
@@ -136,6 +213,7 @@ eqn.edge = edge;
 eqn.elem2dof = elem2dof;
 eqn.bedDof = bedDof;
 eqn.bedNormal = bedNormal;
+eqn.constraintMultiplier = constraintMultiplier;
 
 if option.assemble_tangent
     % Consistent Jacobian of the converged nonlinear residual.  It is
@@ -438,6 +516,26 @@ end
         end
     end
 
+    function [momentumValue,divergenceValue,constraintValue,...
+            totalValue,Kres,Kbres,etaMinRes,etaMaxRes,bedCoefficientRes] = ...
+            evaluateresidual(uk,pk,multiplier)
+        [Kres,etaMinRes,etaMaxRes] = assembleviscous(uk);
+        [Kbres,bedCoefficientRes] = assemblebed(uk);
+        Fres = assembleforce;
+        Fres = addtraction(Fres);
+        state = [uk;pk];
+        stateMatrix = [Kres+Kbres,B';B,sparse(Np,Np)];
+        stateRhs = [Fres;zeros(Np,1)];
+        stateResidual = stateMatrix*state-stateRhs+C'*multiplier;
+        constraintVector = C*state;
+        stateScale = max(1,norm(stateRhs));
+        constraintScale = max(1,norm(state));
+        momentumValue = norm(stateResidual(1:2*Nu))/stateScale;
+        divergenceValue = norm(stateResidual(2*Nu+(1:Np)))/stateScale;
+        constraintValue = norm(constraintVector)/constraintScale;
+        totalValue = max(norm(stateResidual)/stateScale,constraintValue);
+    end
+
     function F = addtraction(F)
         if isempty(topEdgeIdx) || isempty(pde.g_N), return; end
         [lbd,wbd] = quadpts1(6);
@@ -519,12 +617,14 @@ end
         S = [S,nbase(:,1)',nbase(:,2)'];
         row = row+nr;
 
-        pressureMean = accumarray(double(elem(:)),...
-            repmat(area/3,3,1),[Np,1]);
-        row = row+1;
-        I = [I,repmat(row,1,Np)];
-        J = [J,2*Nu+(1:Np)];
-        S = [S,pressureMean'];
+        if addPressureMeanConstraint
+            pressureMean = accumarray(double(elem(:)),...
+                repmat(area/3,3,1),[Np,1]);
+            row = row+1;
+            I = [I,repmat(row,1,Np)];
+            J = [J,2*Nu+(1:Np)];
+            S = [S,pressureMean'];
+        end
         C = sparse(double(I),double(J),S,row,2*Nu+Np);
     end
 end

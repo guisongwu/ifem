@@ -1,4 +1,4 @@
-%% DIAGNOSE_NONLINEAR_STOKES_INVERSION Fair n=1 versus n=3 comparison.
+%% NONLINEARSTOKESDIAGNOSIS Fair n=1 versus n=3 comparison.
 %
 % Keep the geometry, mesh, bed parameter, initial guess, observations and
 % optimization settings fixed.  Change only Glen's exponent n.
@@ -77,7 +77,7 @@ for experiment = 1:numel(nList)
         inverseOption.fdStep);
     assert(all(fdInfo),'A perturbed solve failed for n=%g.',pde.n);
 
-    [U,S,V] = svd(JInitial,'econ'); %#ok<ASGLU>
+    [~,S,V] = svd(JInitial,'econ');
     singularValues = diag(S);
     parameterError = qInitial-qTrue;
     modeCoefficient = V'*parameterError;
@@ -251,7 +251,7 @@ function [u,info] = solveforward(q,u0,pde,option,...
     else
         option.u0 = u0;
     end
-    [soln,~,info] = NonlinearStokesP2P1_periodic(...
+    [soln,~,info] = NonlinearStokesP2P1(...
         node,elem,bdFlag,pde,option);
     u = soln.u;
 end

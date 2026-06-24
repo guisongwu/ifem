@@ -1,4 +1,4 @@
-%% NONLINEAR_STOKES_ICE_SLAB_CONTINUATION Continuation for an ice slab.
+%% NONLINEARSTOKESSLABCONTINUATION Continuation for an ice slab.
 %
 % Reduce eps_reg one decade at a time.  Each converged velocity is used as
 % the initial guess for the next nonlinear solve on the same mesh.
@@ -47,7 +47,7 @@ for stage = 1:nStage
         option.u0 = soln.u;
     end
 
-    [stageSoln,~,info] = NonlinearStokesP2P1_periodic(...
+    [stageSoln,~,info] = NonlinearStokesP2P1(...
         node,elem,bdFlag,pde,option);
 
     converged(stage) = info.converged;

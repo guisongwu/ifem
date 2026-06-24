@@ -1,5 +1,5 @@
-function pde = nonlinear_stokes_mms_data(L,H,slope,eps_reg)
-%% NONLINEAR_STOKES_MMS_DATA Manufactured solution for nonlinear Stokes.
+function pde = NonlinearStokesMMSData(L,H,slope,eps_reg)
+%% NONLINEARSTOKESMMSDATA Manufactured solution for nonlinear Stokes.
 %
 % The physical coordinates are (x,z), and q = z+slope*x.  The stream
 % function psi = sin(2*pi*x/L)*q^3*(H-q)^3 gives a divergence-free,

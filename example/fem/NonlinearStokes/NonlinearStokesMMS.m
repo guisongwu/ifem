@@ -1,4 +1,4 @@
-%% NONLINEAR_STOKES_MMS_TEST Manufactured-solution convergence test.
+%% NONLINEARSTOKESMMS Manufactured-solution convergence test.
 
 close all;
 clear variables;
@@ -18,7 +18,7 @@ errU = zeros(nlevel,1);
 errP = zeros(nlevel,1);
 iteration = zeros(nlevel,1);
 
-pde = nonlinear_stokes_mms_data(L,H,slope,eps_reg);
+pde = NonlinearStokesMMSData(L,H,slope,eps_reg);
 
 option.periodic = true;
 option.periodic_x = [0,L];
@@ -35,7 +35,7 @@ for level = 1:nlevel
     bdFlag = setboundary(node,elem,'Neumann','y==1','Robin','y==0');
     node(:,2) = node(:,2)-slope*node(:,1);
 
-    [soln,~,info] = NonlinearStokesP2P1_periodic(...
+    [soln,~,info] = NonlinearStokesP2P1(...
         node,elem,bdFlag,pde,option);
 
     errUx(level) = getL2error(node,elem,pde.exactux,soln.ux,6);

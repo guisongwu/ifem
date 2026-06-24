@@ -1,4 +1,4 @@
-%% NONLINEAR_STOKES_ICE_SLAB Nonlinear full-Stokes flow in an ice slab.
+%% NONLINEARSTOKESSLAB Nonlinear full-Stokes flow in an ice slab.
 %
 % The physical coordinates are (x,z).  The domain is
 %
@@ -38,7 +38,7 @@ option.tol = 1e-8;
 option.damping = 0.8;
 option.printlevel = 1;
 
-[soln,eqn,info] = NonlinearStokesP2P1_periodic(...
+[soln,eqn,info] = NonlinearStokesP2P1(...
     node,elem,bdFlag,pde,option);
 
 Nu = length(soln.ux);

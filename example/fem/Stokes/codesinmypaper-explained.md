@@ -1870,7 +1870,7 @@ end
 
 ### 20.1 这是线性 Stokes 反演
 
-状态方程的黏度不依赖速度，应力--应变关系是线性的。它没有调用 `NonlinearStokesP2P1_periodic.m`，因此不是 Glen 非线性黏度反演。
+状态方程的黏度不依赖速度，应力--应变关系是线性的。它没有调用 `NonlinearStokesP2P1.m`，因此不是 Glen 非线性黏度反演。
 
 ### 20.2 变量 `m` 是底部 Robin 系数
 

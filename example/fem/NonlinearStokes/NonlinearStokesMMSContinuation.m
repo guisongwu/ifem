@@ -1,4 +1,4 @@
-%% NONLINEAR_STOKES_MMS_CONTINUATION Regularization continuation for MMS.
+%% NONLINEARSTOKESMMSCONTINUATION Regularization continuation for MMS.
 %
 % Reduce eps_reg one decade at a time.  Each converged velocity is used as
 % the initial guess for the next nonlinear solve on the same mesh.
@@ -35,14 +35,14 @@ nCompleted = 0;
 
 for stage = 1:nStage
     eps_reg = epsList(stage);
-    pde = nonlinear_stokes_mms_data(L,H,slope,eps_reg);
+    pde = NonlinearStokesMMSData(L,H,slope,eps_reg);
     option.eps_reg = eps_reg;
 
     if stage > 1
         option.u0 = soln.u;
     end
 
-    [stageSoln,~,info] = NonlinearStokesP2P1_periodic(...
+    [stageSoln,~,info] = NonlinearStokesP2P1(...
         node,elem,bdFlag,pde,option);
 
     converged(stage) = info.converged;

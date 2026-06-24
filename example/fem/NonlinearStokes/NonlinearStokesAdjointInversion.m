@@ -1,4 +1,4 @@
-%% NONLINEAR_STOKES_ADJOINT_INVERSION Adjoint inversion for bed beta(x).
+%% NONLINEARSTOKESADJOINTINVERSION Adjoint inversion for bed beta(x).
 %
 % The state equation uses nonlinear Glen viscosity and a regularized
 % Weertman sliding law.  The inversion variable is q=log(beta).
@@ -50,8 +50,10 @@ option.quadorder = 6;
 option.assemble_tangent = true;
 
 %% Periodic P1 parameterization
-Nm = 4;
-xBeta = (0:Nm-1)'*L/Nm;
+Nm = round(L/h);
+assert(abs(Nm*h-L) <= 100*eps(max(1,L)),...
+    'The parameter grid requires L/h to be an integer.');
+xBeta = (0:Nm-1)'*h;
 betaTrue = 1+0.1*cos(2*pi*xBeta/L);
 betaInitial = betaTrue+0.1*(sin(2*pi*xBeta/L)+0.25);
 qTrue = log(betaTrue);
@@ -81,6 +83,9 @@ history.objective = NaN(maxInverseIt,1);
 history.dataResidual = NaN(maxInverseIt,1);
 history.parameterError = NaN(maxInverseIt,1);
 history.gradientNorm = NaN(maxInverseIt,1);
+derivativeCheck = struct('stateError',NaN,'gradientError',NaN,...
+    'gaussNewtonError',NaN,'finiteDifference',NaN,...
+    'adjointDirection',NaN);
 
 uWarm = [];
 for k = 1:maxInverseIt
@@ -112,7 +117,8 @@ for k = 1:maxInverseIt
         norm(gradient));
 
     if k == 1
-        verifyderivatives(q,u,eqn,G,gradient,dataObs,dataScale,...
+        derivativeCheck = verifyderivatives(...
+            q,u,eqn,G,gradient,dataObs,dataScale,...
             pde,option,node,elem,bdFlag,xBeta,L,topDof);
     end
 
@@ -215,14 +221,12 @@ function product = gaussnewtonproduct(direction,eqn,G,topDof,...
         + alpha*(D'*(D*direction))+lambda*direction;
 end
 
-function verifyderivatives(q,u,eqn,G,gradient,dataObs,dataScale,...
+function check = verifyderivatives(q,u,eqn,G,gradient,dataObs,dataScale,...
         pde,option,node,elem,bdFlag,xBeta,L,topDof)
     direction = sin((1:numel(q))');
     direction = direction/norm(direction);
     epsilon = 1e-3;
 
-    residual = (u(topDof)-dataObs)/dataScale;
-    objective = 0.5*(residual'*residual);
     [uPlus,~,plusInfo] = solveforward(q+epsilon*direction,u,...
         pde,option,node,elem,bdFlag,xBeta,L);
     [uMinus,~,minusInfo] = solveforward(q-epsilon*direction,u,...
@@ -259,6 +263,11 @@ function verifyderivatives(q,u,eqn,G,gradient,dataObs,dataScale,...
         relativeStateError,relativeGradientError,...
         relativeGaussNewtonError,...
         finiteDifference,adjointDirection);
+    check.stateError = relativeStateError;
+    check.gradientError = relativeGradientError;
+    check.gaussNewtonError = relativeGaussNewtonError;
+    check.finiteDifference = finiteDifference;
+    check.adjointDirection = adjointDirection;
 end
 
 function G = assembleparameterderivative(eqn,q,xBeta,L,Nm)
@@ -285,7 +294,7 @@ function [u,eqn,info] = solveforward(q,u0,pde,option,...
     else
         option.u0 = u0;
     end
-    [soln,eqn,info] = NonlinearStokesP2P1_periodic(...
+    [soln,eqn,info] = NonlinearStokesP2P1(...
         node,elem,bdFlag,pde,option);
     u = soln.u;
 end
