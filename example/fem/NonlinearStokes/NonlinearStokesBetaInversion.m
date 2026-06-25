@@ -16,7 +16,9 @@ slope = 0.1;
 h = 1/8;
 
 [node,elem] = squaremesh([0,L,0,H],h);
-bdFlag = setboundary(node,elem,'Neumann','y==0.5','Robin','y==0');
+topBoundaryExpression = sprintf('y==%.17g',H);
+bdFlag = setboundary(node,elem,'Neumann',topBoundaryExpression,...
+    'Robin','y==0');
 node(:,2) = node(:,2)-slope*node(:,1);
 
 %% Surface observation degrees of freedom

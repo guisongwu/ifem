@@ -4,12 +4,12 @@ close all;
 clear variables;
 
 L = 1;
-H = 1;
+H = 0.5;
 slope = 0.1;
 % A moderate regularization keeps the manufactured viscosity smooth.
 % The physical demo can still use the smaller value 1e-4.
 eps_reg = 1e-2;
-hlist = [1/4;1/8;1/16];
+hlist = [1/4;1/8;1/16;1/32];
 nlevel = length(hlist);
 
 errUx = zeros(nlevel,1);
@@ -32,7 +32,9 @@ option.quadorder = 9;
 for level = 1:nlevel
     h = hlist(level);
     [node,elem] = squaremesh([0,L,0,H],h);
-    bdFlag = setboundary(node,elem,'Neumann','y==1','Robin','y==0');
+    topBoundaryExpression = sprintf('y==%.17g',H);
+    bdFlag = setboundary(node,elem,'Neumann',topBoundaryExpression,...
+        'Robin','y==0');
     node(:,2) = node(:,2)-slope*node(:,1);
 
     [soln,~,info] = NonlinearStokesP2P1(...

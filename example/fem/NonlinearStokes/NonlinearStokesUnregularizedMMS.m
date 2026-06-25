@@ -4,14 +4,16 @@ close all;
 clear variables;
 
 L = 1;
-H = 1;
+H = .5;
 slope = 0.1;
 h = 1/16;
 epsList = [1e-2;1e-4;1e-6;0];
 nCase = length(epsList);
 
 [node,elem] = squaremesh([0,L,0,H],h);
-bdFlag = setboundary(node,elem,'Neumann','y==1','Robin','y==0');
+topBoundaryExpression = sprintf('y==%.17g',H);
+bdFlag = setboundary(node,elem,'Neumann',topBoundaryExpression,...
+    'Robin','y==0');
 node(:,2) = node(:,2)-slope*node(:,1);
 pde = NonlinearStokesUnregularizedMMSData(L,H,slope);
 [~,edge] = dofP2(elem);

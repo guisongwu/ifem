@@ -92,12 +92,14 @@ h = 1/8;
 然后设置边界：
 
 ```matlab
-bdFlag = setboundary(node,elem,'Neumann','y==0.5','Robin','y==0');
+topBoundaryExpression = sprintf('y==%.17g',H);
+bdFlag = setboundary(node,elem,'Neumann',topBoundaryExpression,...
+    'Robin','y==0');
 ```
 
 含义是：
 
-- 顶部 `y==0.5` 是 Neumann 边界；
+- 顶部 `y==H` 是 Neumann 边界；
 - 底部 `y==0` 是 Robin 边界，也就是滑移边界；
 - 后续通过坐标变换把矩形变成倾斜 slab：
 

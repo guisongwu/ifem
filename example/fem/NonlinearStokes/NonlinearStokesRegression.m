@@ -72,8 +72,9 @@ divMms = zeros(size(hMms));
 for level = 1:numel(hMms)
     pde = NonlinearStokesMMSData(L,H,slope,epsReg);
     [node,elem] = squaremesh([0,L,0,H],hMms(level));
+    topBoundaryExpression = sprintf('y==%.17g',H);
     bdFlag = setboundary(node,elem,...
-        'Neumann','y==1','Robin','y==0');
+        'Neumann',topBoundaryExpression,'Robin','y==0');
     node(:,2) = node(:,2)-slope*node(:,1);
     option = forwardoption(L,epsReg,1e-11);
     option.maxIt = 180;
@@ -98,7 +99,9 @@ fprintf('MMS finest rates: velocity %.3f, pressure %.3f\n',...
 % The manufactured pressure already has zero mean, so both modes agree.
 pde = NonlinearStokesMMSData(L,H,slope,epsReg);
 [node,elem] = squaremesh([0,L,0,H],1/8);
-bdFlag = setboundary(node,elem,'Neumann','y==1','Robin','y==0');
+topBoundaryExpression = sprintf('y==%.17g',H);
+bdFlag = setboundary(node,elem,'Neumann',topBoundaryExpression,...
+    'Robin','y==0');
 node(:,2) = node(:,2)-slope*node(:,1);
 option = forwardoption(L,epsReg,1e-11);
 option.maxIt = 180;
@@ -198,8 +201,9 @@ function [result,node,elem] = solveiceslab(...
     H = 1;
     slope = 0.1;
     [node,elem] = squaremesh([0,L,0,H],h);
+    topBoundaryExpression = sprintf('y==%.17g',H);
     bdFlag = setboundary(node,elem,...
-        'Neumann','y==1','Robin','y==0');
+        'Neumann',topBoundaryExpression,'Robin','y==0');
     node(:,2) = node(:,2)-slope*node(:,1);
     pde = struct('A',1,'n',3,'beta',10,'m',1/3,...
         'rho',1,'gravity',[0,-1],'g_N',[]);

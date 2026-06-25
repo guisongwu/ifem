@@ -12,6 +12,7 @@ function [soln,eqn,info] = NonlinearStokesP2P1(node,elem,bdFlag,pde,option)
 %   3: impermeable Weertman bed
 %          u*n = 0,
 %          T*sigma*n + beta*|T*u|^(m-1)*T*u = 0.
+%      Set option.bed_condition = 'no-slip' to replace this by u = 0.
 %
 % If option.periodic is true, x = option.periodic_x(1) and
 % x = option.periodic_x(2) are identified.  The two boundaries may be
@@ -33,6 +34,7 @@ function [soln,eqn,info] = NonlinearStokesP2P1(node,elem,bdFlag,pde,option)
 %   option.periodic, option.periodic_x, option.tol,
 %   option.maxIt, option.damping, option.eps_reg, option.quadorder,
 %   option.pressure_constraint ('auto', 'mean-zero', or 'none'),
+%   option.bed_condition ('sliding' or 'no-slip'),
 %   option.residual_tol, option.residual_check_threshold.
 %
 % The nonlinear iteration is a damped Picard iteration.  The small
@@ -49,6 +51,7 @@ option = setoption(option,'quadorder',4);
 option = setoption(option,'printlevel',1);
 option = setoption(option,'assemble_tangent',false);
 option = setoption(option,'pressure_constraint','auto');
+option = setoption(option,'bed_condition','sliding');
 option = setoption(option,'residual_tol',option.tol);
 option = setoption(option,'residual_check_threshold',...
     max(1e-2,sqrt(option.residual_tol)));
@@ -95,6 +98,16 @@ switch pressureConstraint
     otherwise
         error('iFEM:NonlinearStokesPressureConstraint',...
             'Unknown pressure_constraint value: %s.',pressureConstraint);
+end
+if ~(ischar(option.bed_condition) || ...
+        (isstring(option.bed_condition) && isscalar(option.bed_condition)))
+    error('iFEM:NonlinearStokesBedCondition',...
+        'bed_condition must be a character vector or scalar string.');
+end
+bedCondition = lower(strtrim(char(option.bed_condition)));
+if ~ismember(bedCondition,{'sliding','no-slip'})
+    error('iFEM:NonlinearStokesBedCondition',...
+        'Unknown bed_condition value: %s.',bedCondition);
 end
 if ~(isscalar(option.residual_tol) && isfinite(option.residual_tol) && ...
         option.residual_tol > 0)
@@ -208,6 +221,7 @@ info.converged = residualChecked(k) && residual(k) < option.tol && ...
     nonlinearResidual(k) < option.residual_tol;
 info.solveTime = cputime-t0;
 info.bedCoefficient = bedCoefficient;
+info.bedCondition = bedCondition;
 info.pressureConstraint = pressureConstraint;
 info.hasTractionBoundary = hasTractionBoundary;
 info.pressureMeanConstrained = addPressureMeanConstraint;
@@ -315,7 +329,9 @@ end
         % coefficient gamma is frozen at the current tangential velocity.
         Kb = sparse(2*Nu,2*Nu);
         coefAtMid = [];
-        if isempty(bedEdgeIdx), return; end
+        if isempty(bedEdgeIdx) || strcmp(bedCondition,'no-slip')
+            return;
+        end
         [lbd,wbd] = quadpts1(6);
         bed = edge(bedEdgeIdx,:);
         bedLocalDof = [bed, N+bedEdgeIdx];
@@ -419,7 +435,9 @@ end
         % Consistent tangent of beta*(ut^2+eps^2)^((m-1)/2)*ut with
         % respect to the tangential velocity ut.
         Kbt = sparse(2*Nu,2*Nu);
-        if isempty(bedEdgeIdx), return; end
+        if isempty(bedEdgeIdx) || strcmp(bedCondition,'no-slip')
+            return;
+        end
         [lbd,wbd] = quadpts1(6);
         bed = edge(bedEdgeIdx,:);
         bedLocalDof = [bed,N+bedEdgeIdx];
@@ -627,23 +645,39 @@ end
         if option.periodic
             baseDof(abs(udofNode(baseDof,1)-option.periodic_x(2))<tolx) = [];
         end
-        nbase = zeros(length(baseDof),2);
-        for ib = 1:length(baseDof)
-            attached = bedEdgeIdx(any(edge(bedEdgeIdx,:)==baseDof(ib),2));
-            if baseDof(ib)>N
-                attached = baseDof(ib)-N;
+        if strcmp(bedCondition,'no-slip')
+            nr = length(baseDof);
+            rr = row+(1:nr);
+            I = [I,rr];
+            J = [J,baseDof'];
+            S = [S,ones(1,nr)];
+            row = row+nr;
+
+            rr = row+(1:nr);
+            I = [I,rr];
+            J = [J,(Nu+baseDof)'];
+            S = [S,ones(1,nr)];
+            row = row+nr;
+            nbase = zeros(length(baseDof),2);
+        else
+            nbase = zeros(length(baseDof),2);
+            for ib = 1:length(baseDof)
+                attached = bedEdgeIdx(any(edge(bedEdgeIdx,:)==baseDof(ib),2));
+                if baseDof(ib)>N
+                    attached = baseDof(ib)-N;
+                end
+                tangent = node(edge(attached,2),:)-node(edge(attached,1),:);
+                tangent = sum(tangent./sqrt(sum(tangent.^2,2)),1);
+                tangent = tangent/norm(tangent);
+                nbase(ib,:) = [tangent(2),-tangent(1)];
             end
-            tangent = node(edge(attached,2),:)-node(edge(attached,1),:);
-            tangent = sum(tangent./sqrt(sum(tangent.^2,2)),1);
-            tangent = tangent/norm(tangent);
-            nbase(ib,:) = [tangent(2),-tangent(1)];
+            nr = length(baseDof);
+            rr = row+(1:nr);
+            I = [I,rr,rr];
+            J = [J,baseDof',(Nu+baseDof)'];
+            S = [S,nbase(:,1)',nbase(:,2)'];
+            row = row+nr;
         end
-        nr = length(baseDof);
-        rr = row+(1:nr);
-        I = [I,rr,rr];
-        J = [J,baseDof',(Nu+baseDof)'];
-        S = [S,nbase(:,1)',nbase(:,2)'];
-        row = row+nr;
 
         if addPressureMeanConstraint
             pressureMean = accumarray(double(elem(:)),...
