@@ -35,7 +35,7 @@ $$
 
 ## 1. 脚本整体目标
 
-脚本开头注释说明它是从 `NonlinearStokesAdjointInversion.m` 修改而来，主要区别是目标函数换成了顶部边界积分误差：
+脚本开头注释说明它是从 `NSAdjointInversion.m` 修改而来，主要区别是目标函数换成了顶部边界积分误差：
 
 $$
 J(q)
@@ -1411,13 +1411,13 @@ $$
 
 ## 22. 和其他脚本的关系
 
-### `NonlinearStokesDiagnosis.m`
+### `NSDiagnosis.m`
 
 这个脚本用于诊断不同 Glen 指数下的反演问题，并使用有限差分 Jacobian 做 SVD 分析。它更适合理解问题病态性和观测可辨识性。
 
 相比之下，`NonlinearStokesAdjointInversionBoundaryObjective.m` 使用伴随梯度和矩阵自由 Gauss--Newton，更接近实际反演算法。
 
-### `NonlinearStokesDerivativeComparison.m`
+### `NSDerivativeComparison.m`
 
 这个脚本用于验证：
 
@@ -1514,7 +1514,7 @@ pcg(hessian,-gradient,...)
 
 顶部速度观测不一定能完全区分所有底部参数模式。某些 $\beta$ 的变化对顶部速度影响很弱，导致数据拟合已经很好，但参数仍有误差。
 
-这也是 `NonlinearStokesDiagnosis.m` 做 SVD 诊断的原因。
+这也是 `NSDiagnosis.m` 做 SVD 诊断的原因。
 
 ## 24. 一句话总结
 

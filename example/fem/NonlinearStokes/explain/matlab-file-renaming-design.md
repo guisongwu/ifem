@@ -10,15 +10,15 @@
 | 旧文件名 | 新文件名 |
 |---|---|
 | `NonlinearStokesP2P1.m` | `NonlinearStokesP2P1.m` |
-| `NonlinearStokesSlab.m` | `NonlinearStokesSlab.m` |
-| `NonlinearStokesSlabContinuation.m` | `NonlinearStokesSlabContinuation.m` |
-| `NonlinearStokesMMSData.m` | `NonlinearStokesMMSData.m` |
-| `NonlinearStokesMMS.m` | `NonlinearStokesMMS.m` |
-| `NonlinearStokesMMSContinuation.m` | `NonlinearStokesMMSContinuation.m` |
-| `NonlinearStokesBetaInversion.m` | `NonlinearStokesBetaInversion.m` |
-| `NonlinearStokesAdjointInversion.m` | `NonlinearStokesAdjointInversion.m` |
-| `NonlinearStokesDiagnosis.m` | `NonlinearStokesDiagnosis.m` |
-| `NonlinearStokesRegression.m` | `NonlinearStokesRegression.m` |
+| `NSSlab.m` | `NSSlab.m` |
+| `NSSlabContinuation.m` | `NSSlabContinuation.m` |
+| `NSMMSData.m` | `NSMMSData.m` |
+| `NSMMS.m` | `NSConverRate.m` |
+| `NSMMSContinuation.m` | `NSEpsContinuation.m` |
+| `NSBetaInversion.m` | `NSBetaInversion.m` |
+| `NSAdjointInversion.m` | `NSAdjointInversion.m` |
+| `NSDiagnosis.m` | `NSDiagnosis.m` |
+| `NSRegression.m` | `NSRegression.m` |
 
 ## 规则
 
@@ -34,7 +34,7 @@
 重命名后运行：
 
 ```matlab
-NonlinearStokesRegression
+NSRegression
 ```
 
 并确认 MATLAB `which` 解析到所有新文件名。
@@ -42,7 +42,7 @@ NonlinearStokesRegression
 ## 决策记录
 
 1. 使用 MATLAB/iFEM CamelCase 风格。
-2. 所有文件使用 `NonlinearStokes` 前缀。
+2. 所有文件使用 `NS` 前缀。
 3. 周期性不再写入求解器文件名，由选项表达。
 4. 不保留旧入口。
 5. 本轮不合并或重命名现有文档。

@@ -1,4 +1,4 @@
-%% NONLINEARSTOKESMMSCONTINUATION Regularization continuation for MMS.
+%% NSEPSCONTINUATION Regularization continuation for manufactured solution.
 %
 % Reduce eps_reg one decade at a time.  Each converged velocity is used as
 % the initial guess for the next nonlinear solve on the same mesh.
@@ -37,7 +37,7 @@ nCompleted = 0;
 
 for stage = 1:nStage
     eps_reg = epsList(stage);
-    pde = NonlinearStokesMMSData(L,H,slope,eps_reg);
+    pde = NSMMSData(L,H,slope,eps_reg);
     option.eps_reg = eps_reg;
 
     if stage > 1
@@ -62,7 +62,7 @@ for stage = 1:nStage
         errU(stage),errP(stage));
 
     if ~info.converged
-        warning('iFEM:NonlinearStokesContinuationFailed',...
+        warning('iFEM:NSContinuationFailed',...
             'Continuation stopped at eps_reg = %.1e.',eps_reg);
         break
     end

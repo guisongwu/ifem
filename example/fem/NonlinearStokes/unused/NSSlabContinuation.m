@@ -67,7 +67,7 @@ for stage = 1:nStage
         eps_reg,info.converged,info.itStep,etaMin(stage),etaMax(stage));
 
     if ~info.converged
-        warning('iFEM:NonlinearStokesContinuationFailed',...
+        warning('iFEM:NSContinuationFailed',...
             'Continuation stopped at eps_reg = %.1e.',eps_reg);
         break
     end

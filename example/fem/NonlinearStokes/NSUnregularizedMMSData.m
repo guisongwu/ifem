@@ -1,4 +1,4 @@
-function pde = NonlinearStokesUnregularizedMMSData(L,H,slope)
+function pde = NSUnregularizedMMSData(L,H,slope)
 %% NONLINEARSTOKESUNREGULARIZEDMMSDATA Exact shear solution without eps_reg.
 %
 % The exact solution is a tangential shear flow in the slab coordinates

@@ -1,4 +1,4 @@
-%% NONLINEARSTOKESMMS Manufactured-solution convergence test.
+%% NSCONVERRATE Manufactured-solution convergence-rate test.
 
 close all;
 clear variables;
@@ -18,7 +18,7 @@ errU = zeros(nlevel,1);
 errP = zeros(nlevel,1);
 iteration = zeros(nlevel,1);
 
-pde = NonlinearStokesMMSData(L,H,slope,eps_reg);
+pde = NSMMSData(L,H,slope,eps_reg);
 
 option.periodic = true;
 option.periodic_x = [0,L];

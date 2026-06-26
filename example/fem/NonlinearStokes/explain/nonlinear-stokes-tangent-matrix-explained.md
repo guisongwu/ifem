@@ -503,7 +503,7 @@ $$
 =J_\beta+\psi^T R_\beta.
 $$
 
-`NonlinearStokesAdjointInversion.m` 中的核心代码为
+`NSAdjointInversion.m` 中的核心代码为
 
 ```matlab
 adjoint = eqn.tangent'\(-observationGradient);

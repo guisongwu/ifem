@@ -20,7 +20,7 @@ $$
 Bu+m\lambda_p=0.
 $$
 
-在 `NonlinearStokesSlab.m` 中，这表现为不随网格加密下降的非零常数散度。
+在 `NSSlab.m` 中，这表现为不随网格加密下降的非零常数散度。
 
 ## 2. 目标
 
@@ -164,7 +164,7 @@ info.pressureMeanConstrained = addPressureMeanConstraint;
 对于未知选项值，立即报错：
 
 ```matlab
-error('iFEM:NonlinearStokesPressureConstraint',...
+error('iFEM:NSPressureConstraint',...
     'Unknown pressure_constraint value: %s.',...);
 ```
 
@@ -224,7 +224,7 @@ option.pressure_constraint = 'mean-zero';
 
 ### 9.6 伴随反演
 
-运行 `NonlinearStokesAdjointInversion.m`：
+运行 `NSAdjointInversion.m`：
 
 - 正问题收敛；
 - 状态导数检查通过；

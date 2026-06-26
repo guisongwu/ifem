@@ -2,7 +2,7 @@
 %
 % Run from the iFEM root after setpath:
 %
-%   NonlinearStokesRegression
+%   NSRegression
 %
 % The suite checks the forward solver, pressure constraints, manufactured
 % convergence rates, continuation, adjoint derivatives, and inversion
@@ -56,7 +56,7 @@ try
     solveiceslab(1/4,'invalid-mode',1e-4,[],1e-8);
 catch exception
     invalidModeRejected = strcmp(exception.identifier,...
-        'iFEM:NonlinearStokesPressureConstraint');
+        'iFEM:NSPressureConstraint');
 end
 assert(invalidModeRejected,'Unknown pressure-constraint mode was accepted.');
 
@@ -70,7 +70,7 @@ errU = zeros(size(hMms));
 errP = zeros(size(hMms));
 divMms = zeros(size(hMms));
 for level = 1:numel(hMms)
-    pde = NonlinearStokesMMSData(L,H,slope,epsReg);
+    pde = NSMMSData(L,H,slope,epsReg);
     [node,elem] = squaremesh([0,L,0,H],hMms(level));
     topBoundaryExpression = sprintf('y==%.17g',H);
     bdFlag = setboundary(node,elem,...
@@ -97,7 +97,7 @@ fprintf('MMS finest rates: velocity %.3f, pressure %.3f\n',...
     rateU(end),rateP(end));
 
 % The manufactured pressure already has zero mean, so both modes agree.
-pde = NonlinearStokesMMSData(L,H,slope,epsReg);
+pde = NSMMSData(L,H,slope,epsReg);
 [node,elem] = squaremesh([0,L,0,H],1/8);
 topBoundaryExpression = sprintf('y==%.17g',H);
 bdFlag = setboundary(node,elem,'Neumann',topBoundaryExpression,...
@@ -158,7 +158,7 @@ assert(norm(stage.soln.p-ice{1}.soln.p)/norm(ice{1}.soln.p)<1e-8,...
 fprintf('Forward, pressure, MMS, and continuation checks passed.\n');
 
 %% Adjoint inversion and derivative checks
-NonlinearStokesAdjointInversion;
+NSAdjointInversion;
 assert(all(isfinite(history.objective)),...
     'Adjoint inversion objective contains NaN or Inf.');
 assert(all(diff(history.objective)<=1e-12),...
@@ -171,7 +171,7 @@ assert(derivativeCheck.gaussNewtonError<1e-4,...
     'Gauss-Newton derivative check failed.');
 
 %% Finite-difference inversion stability
-NonlinearStokesBetaInversion;
+NSBetaInversion;
 assert(all(isfinite(history.objective)),...
     'Finite-difference inversion objective contains NaN or Inf.');
 assert(all(isfinite(history.dataMisfit)),...

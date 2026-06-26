@@ -21,7 +21,7 @@ example/fem/NonlinearStokes/NonlinearStokesP2P1.m
 新增完整回归测试：
 
 ```text
-example/fem/NonlinearStokes/NonlinearStokesRegression.m
+example/fem/NonlinearStokes/NSRegression.m
 ```
 
 不修改：
@@ -309,7 +309,7 @@ any(bdFlag(:)==2) == false
 新增：
 
 ```text
-example/fem/NonlinearStokes/NonlinearStokesRegression.m
+example/fem/NonlinearStokes/NSRegression.m
 ```
 
 允许运行数分钟，覆盖以下内容。

@@ -2,7 +2,7 @@
 %
 % This diagnostic script solves only the L = 5 km flowline case and plots
 % the mesh, horizontal velocity, vertical velocity, and pressure in one
-% 2-by-2 figure.
+% compact 4-by-1 figure.
 
 close all;
 clear variables;
@@ -86,13 +86,15 @@ end
 function plotfields(node,elem,soln)
     nNode = size(node,1);
 
-    subplot(2,2,1);
+    tiledlayout(4,1,'TileSpacing','compact','Padding','compact');
+
+    nexttile;
     showmesh(node,elem);
     axis equal;
     axis tight;
     title('mesh');
 
-    subplot(2,2,2);
+    nexttile;
     trisurf(elem,node(:,1),node(:,2),soln.ux(1:nNode),...
         'FaceColor','interp','EdgeColor','interp');
     axis equal;
@@ -101,7 +103,7 @@ function plotfields(node,elem,soln)
     title('horizontal velocity u_x');
     view(2);
 
-    subplot(2,2,3);
+    nexttile;
     trisurf(elem,node(:,1),node(:,2),soln.uz(1:nNode),...
         'FaceColor','interp','EdgeColor','interp');
     axis equal;
@@ -110,7 +112,7 @@ function plotfields(node,elem,soln)
     title('vertical velocity u_z');
     view(2);
 
-    subplot(2,2,4);
+    nexttile;
     trisurf(elem,node(:,1),node(:,2),soln.p,...
         'FaceColor','interp','EdgeColor','interp');
     axis equal;

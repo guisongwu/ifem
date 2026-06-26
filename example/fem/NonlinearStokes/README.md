@@ -24,10 +24,10 @@ setpath
 建议按以下顺序了解和验证程序：
 
 ```matlab
-NonlinearStokesSlab          % 冰层正问题
-NonlinearStokesMMS           % 制造解收敛测试
-NonlinearStokesAdjointInversion
-NonlinearStokesRegression    % 完整回归测试
+NSSlab          % 冰层正问题
+NSConverRate    % 制造解收敛阶测试
+NSAdjointInversion
+NSRegression    % 完整回归测试
 ```
 
 ## 核心求解器
@@ -94,7 +94,7 @@ option.pressure_constraint
 
 ## 正问题示例
 
-### `NonlinearStokesSlab.m`
+### `NSSlab.m`
 
 求解倾斜周期冰层上的非线性全 Stokes 正问题，并绘制：
 
@@ -104,7 +104,7 @@ option.pressure_constraint
 
 顶部为零牵引，底部满足不可穿透和 Weertman 滑移条件。
 
-### `NonlinearStokesSlabContinuation.m`
+### `NSSlabContinuation.m`
 
 冰层正问题的正则化延拓版本。依次减小
 \(\varepsilon_{\mathrm{reg}}\)，并将前一级解作为下一级初值，用于提高
@@ -112,7 +112,7 @@ option.pressure_constraint
 
 ## 制造解验证
 
-### `NonlinearStokesMMSData.m`
+### `NSMMSData.m`
 
 定义制造解及其对应数据，包括：
 
@@ -121,7 +121,7 @@ option.pressure_constraint
 - 体力；
 - 顶部牵引。
 
-### `NonlinearStokesMMS.m`
+### `NSConverRate.m`
 
 在多层网格上运行制造解测试，报告速度和压力的 \(L^2\) 误差及收敛阶。
 
@@ -133,14 +133,14 @@ $$
 \|p-p_h\|_{L^2}=O(h^2).
 $$
 
-### `NonlinearStokesMMSContinuation.m`
+### `NSEpsContinuation.m`
 
 在固定网格上逐级减小正则化参数，检查 MMS 解、黏度范围和误差对
 \(\varepsilon_{\mathrm{reg}}\) 的敏感性。
 
 ## 反问题
 
-### `NonlinearStokesBetaInversion.m`
+### `NSBetaInversion.m`
 
 使用表面速度合成观测恢复空间变化的底部摩擦系数
 \(\beta(x)\)。
@@ -156,7 +156,7 @@ $$
 
 该实现直观，适合作为反演基准，但参数维数增加后计算成本较高。
 
-### `NonlinearStokesAdjointInversion.m`
+### `NSAdjointInversion.m`
 
 伴随反演实现，采用：
 
@@ -175,7 +175,7 @@ $$
 
 ## 诊断与测试
 
-### `NonlinearStokesDiagnosis.m`
+### `NSDiagnosis.m`
 
 在相同几何、参数初值和观测条件下比较 Glen 指数 \(n=1\) 与 \(n=3\)：
 
@@ -186,10 +186,10 @@ $$
 
 ### `diagnose_nonlinear_stokes_inversion_result.mat`
 
-`NonlinearStokesDiagnosis.m` 的已保存结果，包括真实参数、初值和两组
+`NSDiagnosis.m` 的已保存结果，包括真实参数、初值和两组
 诊断数据。
 
-### `NonlinearStokesRegression.m`
+### `NSRegression.m`
 
 完整 MATLAB 回归测试，覆盖：
 
@@ -204,7 +204,7 @@ $$
 运行：
 
 ```matlab
-NonlinearStokesRegression
+NSRegression
 ```
 
 全部通过时输出：
@@ -246,9 +246,9 @@ All nonlinear Stokes regression checks passed.
 修改核心数值程序后，至少运行：
 
 ```matlab
-NonlinearStokesMMS
-NonlinearStokesSlab
-NonlinearStokesRegression
+NSConverRate
+NSSlab
+NSRegression
 ```
 
 重点检查：

@@ -1,4 +1,4 @@
-function pde = NonlinearStokesMMSData(L,H,slope,eps_reg)
+function pde = NSMMSData(L,H,slope,eps_reg)
 %% NONLINEARSTOKESMMSDATA Manufactured solution for nonlinear Stokes.
 %
 % The physical coordinates are (x,z), and q = z+slope*x.  The stream

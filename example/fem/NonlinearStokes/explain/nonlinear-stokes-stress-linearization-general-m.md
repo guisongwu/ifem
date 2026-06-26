@@ -1004,3 +1004,52 @@ $$
 | $u_{\rm obs}$ | 顶部水平速度观测 |
 | $J$ | 反问题目标函数 |
 | $\mathbb C(\boldsymbol u)$ | 黏性一致切线张量 |
+
+## 伴随反演思想小结
+
+伴随反演的核心是避免对每一个参数自由度都单独求一次状态导数。正问题给出映射
+
+$$
+\beta \longmapsto \boldsymbol u(\beta),
+$$
+
+反问题希望通过顶部观测误差来调整底部参数 $\beta$。如果直接计算梯度，需要知道每个参数扰动 $\delta\beta$ 引起的速度扰动 $\tilde{\boldsymbol u}$，这会导致大量增量正问题求解。
+
+伴随方法的做法是先把正问题在当前解处线性化：
+
+$$
+\mathcal A(\tilde{\boldsymbol u},\tilde p)
+=
+-
+\mathcal R_\beta[\delta\beta].
+$$
+
+然后引入伴随变量 $(\boldsymbol v,r)$，令它满足线性化算子的转置问题：
+
+$$
+\mathcal A^*(\boldsymbol v,r)
+=
+-
+J_{\boldsymbol u}.
+$$
+
+这样目标函数变分中的状态扰动 $\tilde{\boldsymbol u}$ 可以被消去，最终梯度只表现为底部边界上的参数项：
+
+$$
+\delta J[\delta\beta]
+=
+\int_{\Gamma_b}
+\delta\beta
+|\boldsymbol u_t|^{m-1}
+\boldsymbol u_t\cdot\boldsymbol v_t
+\,ds.
+$$
+
+因此，一次梯度计算只需要一次正问题和一次伴随问题，而不是对每个参数方向分别求增量正问题。进一步地，Gauss--Newton 方法需要 Hessian-vector product；这时对给定方向先解增量正问题，再解增量伴随问题，就可以得到该方向上的二阶信息。
+
+简而言之：
+
+- 正问题把底部参数 $\beta$ 传到顶部速度；
+- 伴随问题把顶部观测误差传回到底部；
+- 梯度由底部速度、伴随速度和滑移律共同给出；
+- 增量正问题和增量伴随问题用于计算 Gauss--Newton Hessian 对方向的作用。

@@ -1,4 +1,4 @@
-function pde = NonlinearStokesBMMSData(L,H,bedAmplitude,slope,eps_reg)
+function pde = NSBMMSData(L,H,bedAmplitude,slope,eps_reg)
 %% NONLINEARSTOKESBMMSDATA Manufactured solution on an ISMIP-HOM B bed.
 %
 % The geometry is the flowline ISMIP-HOM B geometry

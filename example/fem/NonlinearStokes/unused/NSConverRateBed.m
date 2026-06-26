@@ -1,4 +1,4 @@
-%% NONLINEARSTOKESBMMS Manufactured solution on an ISMIP-HOM B bed.
+%% NSCONVERRATEBED Manufactured solution on an ISMIP-HOM B bed.
 %
 % This is a diagnostic construction for a sliding manufactured solution on
 % a B-type bed.  With the current straight-edged triangular geometry it is
@@ -7,8 +7,8 @@
 close all;
 clear variables;
 
-warning('iFEM:NonlinearStokesBMMSDiagnosticOnly',...
-    ['NonlinearStokesBMMS is a diagnostic B-bed sliding MMS. ',...
+warning('iFEM:NSConverRateBedDiagnosticOnly',...
+    ['NSConverRateBed is a diagnostic B-bed sliding MMS. ',...
      'Do not use its table as a formal convergence-rate test.']);
 
 L = 1;
@@ -19,7 +19,7 @@ eps_reg = 1e-2;
 hlist = [1/4;1/8;1/16;1/32];
 nlevel = length(hlist);
 
-pde = NonlinearStokesBMMSData(L,H,bedAmplitude,slope,eps_reg);
+pde = NSBMMSData(L,H,bedAmplitude,slope,eps_reg);
 
 errUx = zeros(nlevel,1);
 errUz = zeros(nlevel,1);

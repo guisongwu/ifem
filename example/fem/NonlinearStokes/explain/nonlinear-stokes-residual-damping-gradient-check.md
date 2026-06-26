@@ -10,9 +10,9 @@
 
 ```text
 example/fem/NonlinearStokes/NonlinearStokesP2P1.m
-example/fem/NonlinearStokes/NonlinearStokesAdjointInversion.m
-example/fem/NonlinearStokes/NonlinearStokesBetaInversion.m
-example/fem/NonlinearStokes/NonlinearStokesRegression.m
+example/fem/NonlinearStokes/NSAdjointInversion.m
+example/fem/NonlinearStokes/NSBetaInversion.m
+example/fem/NonlinearStokes/NSRegression.m
 ```
 
 ## 1. 非线性离散方程

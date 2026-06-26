@@ -1,4 +1,4 @@
-%% NONLINEARSTOKESUNREGULARIZEDMMS Compare eps_reg against unregularized MMS.
+%% NSEPSCOMPARE Compare eps_reg against an unregularized manufactured solution.
 
 close all;
 clear variables;
@@ -15,7 +15,7 @@ topBoundaryExpression = sprintf('y==%.17g',H);
 bdFlag = setboundary(node,elem,'Neumann',topBoundaryExpression,...
     'Robin','y==0');
 node(:,2) = node(:,2)-slope*node(:,1);
-pde = NonlinearStokesUnregularizedMMSData(L,H,slope);
+pde = NSUnregularizedMMSData(L,H,slope);
 [~,edge] = dofP2(elem);
 uNode = [node;(node(edge(:,1),:)+node(edge(:,2),:))/2];
 optionInitial = [pde.exactux(uNode);pde.exactuz(uNode)];

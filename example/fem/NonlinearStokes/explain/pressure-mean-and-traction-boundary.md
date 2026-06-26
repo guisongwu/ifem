@@ -6,16 +6,16 @@
 - 压力零均值条件什么时候可以使用；
 - 顶部牵引条件为什么会固定压力常数；
 - 为什么不能同时任意指定压力零均值和绝对牵引；
-- `NonlinearStokesSlab.m` 中为什么出现非零常数散度；
+- `NSSlab.m` 中为什么出现非零常数散度；
 - MMS 测试为什么没有出现同样的问题。
 
 相关代码：
 
 ```text
 example/fem/NonlinearStokes/NonlinearStokesP2P1.m
-example/fem/NonlinearStokes/NonlinearStokesSlab.m
-example/fem/NonlinearStokes/NonlinearStokesMMS.m
-example/fem/NonlinearStokes/NonlinearStokesMMSData.m
+example/fem/NonlinearStokes/NSSlab.m
+example/fem/NonlinearStokes/NSConverRate.m
+example/fem/NonlinearStokes/NSMMSData.m
 ```
 
 ## 1. 不可压缩 Stokes 方程
@@ -463,7 +463,7 @@ $$
 
 ## 10. `ice_slab` 中出现了什么
 
-`NonlinearStokesSlab.m` 使用：
+`NSSlab.m` 使用：
 
 $$
 g_N=0
