@@ -172,6 +172,185 @@ $$
 
 反问题中的所有伴随和增量方程，都是从这个约束的一阶线性化和转置得到的。
 
+## 非线性正问题残差是什么
+
+非线性正问题残差表示：把当前速度、压力和参数代入正问题后，方程和边界条件还剩下多少没有被满足。
+
+如果 $(\boldsymbol u,p)$ 是给定 $\beta$ 下的精确正问题解，那么
+
+$$
+\mathcal R(\boldsymbol u,p,\beta)=0.
+$$
+
+如果 $(\boldsymbol u,p)$ 只是非线性迭代中的近似解，那么一般有
+
+$$
+\mathcal R(\boldsymbol u,p,\beta)\ne 0.
+$$
+
+在连续强形式层面，残差可以理解为几类不平衡量的集合。体内动量方程残差为
+
+$$
+-\nabla\cdot\boldsymbol\sigma-\rho\boldsymbol g.
+$$
+
+不可压缩条件残差为
+
+$$
+\nabla\cdot\boldsymbol u.
+$$
+
+顶部自然边界条件残差为
+
+$$
+\boldsymbol\sigma\boldsymbol n.
+$$
+
+底部不可穿透条件残差为
+
+$$
+\boldsymbol u\cdot\boldsymbol n.
+$$
+
+底部滑移边界条件残差为
+
+$$
+\boldsymbol T\boldsymbol\sigma\boldsymbol n
++
+\beta|\boldsymbol u_t|^{m-1}\boldsymbol u_t.
+$$
+
+因此可以把正问题残差抽象写成
+
+$$
+\mathcal R(\boldsymbol u,p,\beta)
+=
+\begin{bmatrix}
+-\nabla\cdot\boldsymbol\sigma-\rho\boldsymbol g\\
+\nabla\cdot\boldsymbol u\\
+\text{boundary residuals}\\
+\text{constraint residuals}
+\end{bmatrix}.
+$$
+
+这里的残差不是有限元误差，而是方程的不平衡量。残差为零表示离散或连续方程被满足；残差不为零表示当前候选解还没有满足正问题。
+
+它叫非线性残差，是因为应力
+
+$$
+\boldsymbol\sigma
+=
+2\eta(\boldsymbol u)\dot{\boldsymbol\varepsilon}(\boldsymbol u)
+-
+p\boldsymbol I
+$$
+
+通过黏度 $\eta(\boldsymbol u)$ 非线性依赖速度，同时底部滑移项
+
+$$
+\beta|\boldsymbol u_t|^{m-1}\boldsymbol u_t
+$$
+
+也非线性依赖底部切向速度。也就是说，$\mathcal R$ 是关于 $(\boldsymbol u,p)$ 和参数 $\beta$ 的非线性算子。
+
+## 为什么要做一阶线性化
+
+一阶线性化的目的不是把物理模型改成线性模型，而是求出非线性正问题残差
+
+$$
+\mathcal R(\boldsymbol u,p,\beta)=0
+$$
+
+对状态变量 $(\boldsymbol u,p)$ 和参数 $\beta$ 的导数。这个导数就是连续层面的切线算子，也对应离散代码中的一致切线矩阵。
+
+非线性 Stokes 反问题中，至少有两类项必须线性化。
+
+第一类是体内应力项：
+
+$$
+\boldsymbol\sigma(\boldsymbol u,p)
+=
+2\eta(\boldsymbol u)\dot{\boldsymbol\varepsilon}(\boldsymbol u)
+-
+p\boldsymbol I.
+$$
+
+这里的非线性来自有效黏度 $\eta(\boldsymbol u)$。Glen 型流律中，黏度依赖应变率不变量，而应变率由速度决定。因此速度扰动 $\tilde{\boldsymbol u}$ 会同时改变两件事：
+
+1. 应变率 $\dot{\boldsymbol\varepsilon}(\boldsymbol u)$；
+2. 黏度 $\eta(\boldsymbol u)$。
+
+所以应力的一阶变化不仅有
+
+$$
+2\eta(\boldsymbol u)\dot{\boldsymbol\varepsilon}(\tilde{\boldsymbol u}),
+$$
+
+还必须包含
+
+$$
+2\eta'(\boldsymbol u)[\tilde{\boldsymbol u}]
+\dot{\boldsymbol\varepsilon}(\boldsymbol u).
+$$
+
+如果漏掉第二项，相当于冻结黏度，只得到 Picard 型近似矩阵，而不是非线性残差的真实 Jacobian。
+
+第二类是底部滑移项：
+
+$$
+\beta|\boldsymbol u_t|^{m-1}\boldsymbol u_t.
+$$
+
+它同时依赖底部切向速度 $\boldsymbol u_t$ 和参数 $\beta$。因此需要两种导数：
+
+$$
+D_{\boldsymbol u}
+\left(
+\beta|\boldsymbol u_t|^{m-1}\boldsymbol u_t
+\right)
+[\tilde{\boldsymbol u}]
+$$
+
+以及
+
+$$
+D_\beta
+\left(
+\beta|\boldsymbol u_t|^{m-1}\boldsymbol u_t
+\right)
+[\delta\beta].
+$$
+
+前者进入增量正问题和伴随问题的左端切线算子，后者形成参数扰动导致的右端项。因为 $\beta$ 只出现在底部滑移边界条件中，所以参数导数的源项也只出现在底部边界上。
+
+这些一阶线性化主要服务于三件事。
+
+1. 增量正问题：描述参数 $\beta$ 改变一点时，正问题解 $(\boldsymbol u,p)$ 的一阶变化。形式上是
+
+$$
+\mathcal R_{(\boldsymbol u,p)}
+[\tilde{\boldsymbol u},\tilde p]
+=
+-
+\mathcal R_\beta[\delta\beta].
+$$
+
+2. 伴随问题和梯度：伴随方程使用线性化算子的转置
+
+$$
+\mathcal R_{(\boldsymbol u,p)}^*
+[\boldsymbol v,r]
+=
+-
+J_{\boldsymbol u}.
+$$
+
+如果这里使用的不是完整一致线性化，而是冻结黏度或冻结滑移律的近似矩阵，得到的伴随梯度一般不会和有限差分梯度一致。
+
+3. Gauss--Newton Hessian 作用：矩阵自由 Hessian-vector product 需要先解增量正问题，再解增量伴随问题。二者都依赖同一个一致切线算子。
+
+因此，做应力和底部滑移律的一阶线性化，是为了得到非线性 Stokes 正问题残差对状态和参数的真实一阶导数。这个导数是增量方程、伴随方程、梯度计算和 Gauss--Newton 反演的基础。
+
 ## 目标函数
 
 假设顶部有水平速度观测 $u_{\rm obs}$。目标函数取为
