@@ -217,17 +217,17 @@ All nonlinear Stokes regression checks passed.
 
 ## 技术文档
 
-### `nonlinear-stokes-tangent-matrix-explained.md`
+### `doc/implementation/tangent-matrix.md`
 
 解释残差、黏性残差、一致切线矩阵，以及 Picard 矩阵与一致切线矩阵的
 区别。
 
-### `pressure-mean-and-traction-boundary.md`
+### `doc/theory/pressure-traction.md`
 
 解释压力零均值规范与牵引边界之间的数学关系，以及不相容约束为什么会
 导致常数散度。
 
-### `nonlinear-stokes-residual-damping-gradient-check.md`
+### `doc/implementation/residual-damping-gradient.md`
 
 解释完整非线性残差、拉格朗日乘子同步阻尼和伴随梯度有限差分检查。
 
@@ -235,11 +235,11 @@ All nonlinear Stokes regression checks passed.
 
 以下文件记录开发过程中的设计决策：
 
-- `nonlinear_stokes_continuation_design.md`
-- `nonlinear-stokes-pressure-constraint-design.md`
-- `nonlinear-stokes-reliability-improvements-design.md`
-- `nonlinear-stokes-directory-migration-design.md`
-- `matlab-file-renaming-design.md`
+- `doc/design/continuation.md`
+- `doc/design/pressure-constraint.md`
+- `doc/design/reliability.md`
+- `doc/design/migration.md`
+- `doc/design/renaming.md`
 
 ## 推荐验证流程
 

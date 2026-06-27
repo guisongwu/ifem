@@ -34,7 +34,7 @@ example/fem/NonlinearStokes/NSRegression.m
 
 ## 3. 压力自动约束
 
-保留现有规则：
+详细背景见 [pressure-constraint.md](pressure-constraint.md) 和 [../theory/pressure-traction.md](../theory/pressure-traction.md)。本设计只保留实现决策：
 
 ```matlab
 hasTractionBoundary = any(bdFlag(:)==2);
@@ -59,85 +59,16 @@ info.pressureMeanConstrained
 
 ## 4. 完整非线性残差
 
-状态和约束变量记为
+完整残差的数学解释见 [../implementation/residual-damping-gradient.md](../implementation/residual-damping-gradient.md)。本设计只规定实现要求：
 
-$$
-X=
-\begin{bmatrix}
-u\\
-p
-\end{bmatrix},
-\qquad
-\lambda=\text{约束拉格朗日乘子}.
-$$
-
-在当前状态 $u$ 重新装配：
-
-$$
-K(u),\qquad K_b(u),\qquad F.
-$$
-
-完整增广离散残差定义为
-
-$$
-R_{\mathrm{momentum}}
-=
-\left(K(u)+K_b(u)\right)u
-+B^Tp
--F
-+C_u^T\lambda,
-$$
-
-$$
-R_{\mathrm{div}}
-=Bu+C_p^T\lambda,
-$$
-
-$$
-R_{\mathrm{constraint}}
-=CX.
-$$
-
-其中将约束矩阵按速度和压力列分块：
-
-$$
-C=[C_u,\ C_p].
-$$
-
-也可统一写为
-
-$$
-R_{\mathrm{state}}
-=
-\begin{bmatrix}
-K(u)+K_b(u) & B^T\\
-B & 0
-\end{bmatrix}
-X
--
-\begin{bmatrix}
-F\\
-0
-\end{bmatrix}
-+C^T\lambda.
-$$
-
-完整增广残差为
-
-$$
-R_{\mathrm{aug}}
-=
-\begin{bmatrix}
-R_{\mathrm{state}}\\
-R_{\mathrm{constraint}}
-\end{bmatrix}.
-$$
-
-必须保留 $\lambda$，否则周期约束、底部不可穿透约束和压力规范产生的反力会被错误计入动量或连续性残差。
+- 在当前阻尼后的速度处重新装配黏性矩阵、底部滑移矩阵和右端；
+- 残差包含动量方程、不可压条件和所有约束方程；
+- 残差检查必须使用速度、压力和约束乘子的同一个阻尼后状态；
+- 约束乘子必须参与动量和连续性残差，避免把约束反力误判为方程误差。
 
 ## 5. 阻尼与拉格朗日乘子
 
-当前 Picard 迭代对速度和压力使用阻尼：
+Picard 迭代对速度、压力和约束乘子同步阻尼：
 
 $$
 u^{k+1}=(1-\alpha)u^k+\alpha\widehat u^{k+1},
@@ -160,42 +91,7 @@ $$
 
 ## 6. 残差归一化
 
-定义状态右端：
-
-$$
-b=
-\begin{bmatrix}
-F\\
-0
-\end{bmatrix}.
-$$
-
-状态残差归一化为
-
-$$
-r_{\mathrm{state}}
-=
-\frac{\|R_{\mathrm{state}}\|}
-{\max(1,\|b\|)}.
-$$
-
-约束残差归一化为
-
-$$
-r_{\mathrm{constraint}}
-=
-\frac{\|CX\|}
-{\max(1,\|X\|)}.
-$$
-
-总残差定义为
-
-$$
-r_{\mathrm{total}}
-=\max(r_{\mathrm{state}},r_{\mathrm{constraint}}).
-$$
-
-同时单独记录：
+残差归一化规则沿用 [../implementation/residual-damping-gradient.md](../implementation/residual-damping-gradient.md)。实现中总残差取状态残差和约束残差的最大值，并单独记录：
 
 - 动量残差；
 - 连续性残差；

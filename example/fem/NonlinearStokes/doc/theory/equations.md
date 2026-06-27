@@ -9,7 +9,7 @@
 
 目标是说明这些方程各自从哪里来、每个符号表示什么，以及它们如何组成伴随反演和 Gauss--Newton 方法。本文只讨论连续形式，不涉及离散矩阵或数值实现。
 
-本文取底部线性滑移，即滑移指数 $m=1$。通用 $m$ 的版本已备份在 `nonlinear-stokes-stress-linearization-general-m.md`。
+本文取底部线性滑移，即滑移指数 $m=1$。通用 $m$ 的版本见 `stress-linearization.md`。
 
 ## 记号约定
 
