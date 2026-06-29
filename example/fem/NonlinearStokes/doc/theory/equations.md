@@ -80,13 +80,7 @@ $$
 \boldsymbol I-\boldsymbol n\otimes\boldsymbol n.
 $$
 
-其中 $\otimes$ 表示张量积。对任意 $\boldsymbol a,\boldsymbol b\in\mathbb R^d$，
-
-$$
-(\boldsymbol a\otimes\boldsymbol b)_{ij}=a_i b_j.
-$$
-
-因此 $\boldsymbol n\otimes\boldsymbol n$ 给出法向投影，$\boldsymbol T$ 给出切向投影。任意速度 $\boldsymbol w$ 的底部切向分量记为
+这里的张量积和切向投影记号已在 `tensor-notation.md` 中说明。任意速度 $\boldsymbol w$ 的底部切向分量记为
 
 $$
 \boldsymbol w_t=\boldsymbol T\boldsymbol w.
@@ -349,25 +343,7 @@ $$
 \dot{\boldsymbol\varepsilon}_{\boldsymbol u}.
 $$
 
-在当前速度场 $\boldsymbol u$ 固定时，$\eta$、$\partial\eta/\partial\varepsilon_\text{II}$ 和 $\dot{\boldsymbol\varepsilon}_{\boldsymbol u}$ 都是已知量，唯一的方向变量是 $\dot{\boldsymbol\varepsilon}_{\tilde{\boldsymbol u}}$。上式右端第一项显然对 $\dot{\boldsymbol\varepsilon}_{\tilde{\boldsymbol u}}$ 是线性的；第二项中
-
-$$
-\dot{\boldsymbol\varepsilon}_{\boldsymbol u}
-:
-\dot{\boldsymbol\varepsilon}_{\tilde{\boldsymbol u}}
-$$
-
-是关于 $\dot{\boldsymbol\varepsilon}_{\tilde{\boldsymbol u}}$ 的线性函数，再乘上固定的 $\dot{\boldsymbol\varepsilon}_{\boldsymbol u}$ 后仍然是线性映射。因此整体定义了一个线性映射：
-
-$$
-\dot{\boldsymbol\varepsilon}_{\tilde{\boldsymbol u}}
-\longmapsto
-\delta\boldsymbol\sigma_{\rm visc}.
-$$
-
-它的输入是二阶张量，输出也是二阶张量。这样的线性映射可以用四阶张量表示。类比矩阵乘向量：如果 $x\mapsto y$ 是向量到向量的线性映射，就可以写成 $y=Ax$；这里输入和输出都从向量换成二阶张量，所以表示这个线性映射的对象就是四阶张量。
-
-因此可以定义四阶张量 $\mathbb C(\boldsymbol u)$，使得
+在当前速度场 $\boldsymbol u$ 固定时，上式是关于 $\dot{\boldsymbol\varepsilon}_{\tilde{\boldsymbol u}}$ 的线性映射，因此可以用四阶切线张量 $\mathbb C(\boldsymbol u)$ 表示。相关张量记号和分量形式已在 `tensor-notation.md` 中说明。这里直接记为
 
 $$
 \mathbb C(\boldsymbol u):
@@ -386,115 +362,7 @@ $$
 \dot{\boldsymbol\varepsilon}_{\boldsymbol u}.
 $$
 
-用分量形式写，就是
-
-$$
-C_{ijkl}(\boldsymbol u)
-=
-2\eta\,\delta_{ik}\delta_{jl}
-+
-2
-\frac{\partial\eta}{\partial\varepsilon_\text{II}}
-\left(\dot{\boldsymbol\varepsilon}_{\boldsymbol u}\right)_{ij}
-\left(\dot{\boldsymbol\varepsilon}_{\boldsymbol u}\right)_{kl},
-$$
-
-并且
-
-$$
-\left(
-\mathbb C(\boldsymbol u):
-\dot{\boldsymbol\varepsilon}_{\tilde{\boldsymbol u}}
-\right)_{ij}
-=
-C_{ijkl}(\boldsymbol u)
-\left(\dot{\boldsymbol\varepsilon}_{\tilde{\boldsymbol u}}\right)_{kl}.
-$$
-
-这里的冒号表示四阶张量和二阶张量之间的双点积。一般地，若 $\mathbb C$ 是四阶张量，$\boldsymbol A$ 是二阶张量，则
-
-$$
-\left(\mathbb C:\boldsymbol A\right)_{ij}
-=
-C_{ijkl}A_{kl},
-$$
-
-也就是对重复指标 $k,l$ 求和，剩下的 $i,j$ 组成结果二阶张量。例如在二维中，
-
-$$
-\left(\mathbb C:\boldsymbol A\right)_{11}
-=
-C_{1111}A_{11}
-+
-C_{1112}A_{12}
-+
-C_{1121}A_{21}
-+
-C_{1122}A_{22}.
-$$
-
-把上面的 $C_{ijkl}(\boldsymbol u)$ 代入双点积公式，有
-
-$$
-\begin{aligned}
-\left(
-\mathbb C(\boldsymbol u):
-\dot{\boldsymbol\varepsilon}_{\tilde{\boldsymbol u}}
-\right)_{ij}
-&=
-2\eta\,
-\delta_{ik}\delta_{jl}
-\left(\dot{\boldsymbol\varepsilon}_{\tilde{\boldsymbol u}}\right)_{kl}
-\\
-&\quad+
-2
-\frac{\partial\eta}{\partial\varepsilon_\text{II}}
-\left(\dot{\boldsymbol\varepsilon}_{\boldsymbol u}\right)_{ij}
-\left(\dot{\boldsymbol\varepsilon}_{\boldsymbol u}\right)_{kl}
-\left(\dot{\boldsymbol\varepsilon}_{\tilde{\boldsymbol u}}\right)_{kl}.
-\end{aligned}
-$$
-
-第一项中，Kronecker 符号 $\delta_{ik}\delta_{jl}$ 只是在指标上做选择，因此
-
-$$
-\delta_{ik}\delta_{jl}
-\left(\dot{\boldsymbol\varepsilon}_{\tilde{\boldsymbol u}}\right)_{kl}
-=
-\left(\dot{\boldsymbol\varepsilon}_{\tilde{\boldsymbol u}}\right)_{ij}.
-$$
-
-第二项中，
-
-$$
-\left(\dot{\boldsymbol\varepsilon}_{\boldsymbol u}\right)_{kl}
-\left(\dot{\boldsymbol\varepsilon}_{\tilde{\boldsymbol u}}\right)_{kl}
-=
-\dot{\boldsymbol\varepsilon}_{\boldsymbol u}
-:
-\dot{\boldsymbol\varepsilon}_{\tilde{\boldsymbol u}}.
-$$
-
-所以四阶张量的双点积正好给出前面的线性映射：
-
-$$
-\mathbb C(\boldsymbol u):
-\dot{\boldsymbol\varepsilon}_{\tilde{\boldsymbol u}}
-=
-2\eta
-\dot{\boldsymbol\varepsilon}_{\tilde{\boldsymbol u}}
-+
-2
-\frac{\partial\eta}{\partial\varepsilon_\text{II}}
-\left(
-\dot{\boldsymbol\varepsilon}_{\boldsymbol u}
-:
-\dot{\boldsymbol\varepsilon}_{\tilde{\boldsymbol u}}
-\right)
-\dot{\boldsymbol\varepsilon}_{\boldsymbol u}.
-$$
-
-由于 $\dot{\boldsymbol\varepsilon}_{\tilde{\boldsymbol u}}$ 是对称应变率张量，这里的四阶张量只需要理解为作用在对称二阶张量空间上的线性算子。于是完整线性化应力可以写成
+于是完整线性化应力可以写成
 
 $$
 \delta\boldsymbol\sigma(\bm u,p)[\tilde{\boldsymbol u},\tilde p]
@@ -673,96 +541,7 @@ $$
 r\boldsymbol I.
 $$
 
-这里 $\mathbb C(\boldsymbol u)^T$ 是相对于张量内积的转置，即
-
-$$
-\left(
-\mathbb C:\boldsymbol A
-\right):\boldsymbol B
-=
-\boldsymbol A:
-\left(
-\mathbb C^T:\boldsymbol B
-\right).
-$$
-
-用分量写，若
-
-$$
-\left(\mathbb C:\boldsymbol A\right)_{ij}
-=
-C_{ijkl}A_{kl},
-$$
-
-则转置张量满足
-
-$$
-\left(\mathbb C^T:\boldsymbol B\right)_{kl}
-=
-C^T_{klij}B_{ij}.
-$$
-
-为了使
-
-$$
-\left(\mathbb C:\boldsymbol A\right):\boldsymbol B
-=
-\boldsymbol A:\left(\mathbb C^T:\boldsymbol B\right)
-$$
-
-对任意二阶张量 $\boldsymbol A,\boldsymbol B$ 成立，需要
-
-$$
-C^T_{klij}=C_{ijkl}.
-$$
-
-等价地，若仍用 $i,j,k,l$ 作为自由指标，则
-
-$$
-C^T_{ijkl}=C_{klij}.
-$$
-
-因此这里的四阶张量转置是交换两对指标：
-
-$$
-(i,j)\longleftrightarrow(k,l).
-$$
-
-这和矩阵转置完全类比。矩阵把向量映射成向量，转置交换输出指标和输入指标；这里 $\mathbb C$ 把二阶张量映射成二阶张量，所以转置交换输出指标对和输入指标对。
-
-对于本文中的黏性切线，
-
-$$
-C_{ijkl}(\boldsymbol u)
-=
-2\eta\,\delta_{ik}\delta_{jl}
-+
-2
-\frac{\partial\eta}{\partial\varepsilon_\text{II}}
-\left(\dot{\boldsymbol\varepsilon}_{\boldsymbol u}\right)_{ij}
-\left(\dot{\boldsymbol\varepsilon}_{\boldsymbol u}\right)_{kl}.
-$$
-
-交换 $(i,j)$ 和 $(k,l)$ 后，
-
-$$
-C_{klij}(\boldsymbol u)
-=
-2\eta\,\delta_{ki}\delta_{lj}
-+
-2
-\frac{\partial\eta}{\partial\varepsilon_\text{II}}
-\left(\dot{\boldsymbol\varepsilon}_{\boldsymbol u}\right)_{kl}
-\left(\dot{\boldsymbol\varepsilon}_{\boldsymbol u}\right)_{ij}.
-$$
-
-由于 $\delta_{ki}\delta_{lj}=\delta_{ik}\delta_{jl}$，且标量乘法可交换，所以
-
-$$
-C_{klij}(\boldsymbol u)=C_{ijkl}(\boldsymbol u).
-$$
-
-因此这个 Glen 型黏性切线满足
+这里 $\mathbb C(\boldsymbol u)^T$ 是相对于张量内积的转置，具体定义和指标交换关系已在 `tensor-notation.md` 中说明。对本文中的 Glen 型黏性切线，有
 
 $$
 \mathbb C(\boldsymbol u)^T=\mathbb C(\boldsymbol u).
