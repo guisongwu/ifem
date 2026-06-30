@@ -4,12 +4,29 @@
 % Synthetic top-surface horizontal velocity observations are generated on
 % the same mapped geometry and used to recover beta on the basal boundary.
 
-close all;
-clear variables;
-set(groot,'DefaultFigureVisible','on');
+if exist('foInvConfig','var')
+    close all;
+else
+    close all;
+    clear variables;
+    foInvConfig = struct;
+end
+set(groot,'DefaultFigureVisible',getconfig(foInvConfig,'figureVisible','on'));
 
 %% Geometry and model
-L = 4;
+% Fixed-thickness cases.  Toggle exactly one branch to compare how
+% horizontal length affects beta identifiability from top-surface velocity
+% data.
+if 0
+    L = 1;
+    domainCase = 'L1';
+elseif 0
+    L = 2;
+    domainCase = 'L2';
+elseif 1
+    L = 4;
+    domainCase = 'L4';
+end
 H = 1;
 h = 0.1;
 slope = tan(0.5*pi/180);
@@ -17,8 +34,9 @@ bedAmplitude = 0.1*H;
 Nx = max(4,round(L/h));
 Nz = max(3,round(H/h));
 
-fprintf(['FO sin-bed beta inversion: L = %.04e, H = %.04e, ',...
-    'h = %.04e, Nx = %d, Nz = %d\n'],L,H,h,Nx,Nz);
+fprintf(['FO sin-bed beta inversion case %s: L = %.04e, ',...
+    'H = %.04e, h = %.04e, Nx = %d, Nz = %d\n'],...
+    domainCase,L,H,h,Nx,Nz);
 
 [node,elem] = rectanglemesh(L,1,Nx,Nz);
 bdFlag = setboundary(node,elem,'Neumann','y==1','Robin','y==0');
@@ -44,7 +62,7 @@ option.n = pde.n;
 option.m = pde.m;
 option.rho = pde.rho;
 option.gravity = pde.gravity;
-option.eps_reg = 1e-3;
+option.eps_reg = getconfig(foInvConfig,'eps_reg',1e-3);
 option.maxIt = 200;
 option.tol = 1e-11;
 option.residual_tol = 1e-11;
@@ -59,15 +77,48 @@ Nm = Nx;
 xBeta = (0:Nm-1)'*L/Nm;
 xi = mod(xBeta,L)/L;
 
-betaTrue = 2*(1+0.25*cos(2*pi*xi));
-betaTrueName = 'trigonometric';
-betaPerturbation = 0.15*sin(2*pi*xi)+0.08*cos(4*pi*xi)+0.05;
-perturbationName = 'mixed trigonometric';
+if 0
+    betaTrue = 2*ones(size(xi));
+    betaTrueName = 'constant';
+elseif 0
+    betaTrue = 2*(0.85+0.30*xi);
+    betaTrueName = 'linear';
+elseif 0
+    betaTrue = 2*(0.9+0.4*(2*xi-1).^2);
+    betaTrueName = 'quadratic';
+elseif 1
+    betaTrue = 2*(1+0.25*cos(2*pi*xi));
+    betaTrueName = 'trigonometric';
+elseif 0
+    betaTrue = 2*(1+0.20*cos(2*pi*xi)+0.10*sin(4*pi*xi));
+    betaTrueName = 'mixed trigonometric';
+end
+
+if 0
+    betaPerturbation = 0.15*ones(size(xi));
+    perturbationName = 'constant';
+elseif 0
+    betaPerturbation = 0.05+0.15*xi;
+    perturbationName = 'linear';
+elseif 0
+    betaPerturbation = 0.20*((2*xi-1).^2-1/3)+0.05;
+    perturbationName = 'quadratic';
+elseif 1
+    betaPerturbation = 0.20*sin(2*pi*xi)+0.05;
+    perturbationName = 'trigonometric';
+elseif 0
+    betaPerturbation = 0.15*sin(2*pi*xi)+...
+        0.08*cos(4*pi*xi)+0.05;
+    perturbationName = 'mixed trigonometric';
+end
 
 betaInitial = betaTrue.*(1+betaPerturbation);
 qTrue = log(betaTrue);
 q = log(betaInitial);
 betaPlotX = linspace(0,L,401)';
+
+D = spdiags([-ones(Nm,1),ones(Nm,1)],[0,1],Nm,Nm);
+D(Nm,1) = 1;
 
 %% Synthetic top observation
 [uTrue,eqnTrue,trueInfo] = solveforward(qTrue,[],pde,option,xBeta,L);
@@ -91,13 +142,15 @@ fprintf(['  beta true: %s, initial perturbation: %s, ',...
     betaTrueName,perturbationName,Nm,numel(topDof));
 
 %% Inverse options
-maxInverseIt = 30;
-lambda = 1e-7;
+maxInverseIt = getconfig(foInvConfig,'maxInverseIt',50);
+alpha = getconfig(foInvConfig,'alpha',1e-11); % iteration 14
+% alpha = getconfig(foInvConfig,'alpha',1e-12); % iteration 23
+lambda = getconfig(foInvConfig,'lambda',1e-8);
 pcgTolerance = 1e-8;
 pcgMaxIt = 50;
 stepTolerance = 1e-7;
 gradientTolerance = 1e-9;
-useLineSearch = defaultlinesearch();
+useLineSearch = getconfig(foInvConfig,'useLineSearch',defaultlinesearch());
 
 history.objective = NaN(maxInverseIt,1);
 history.dataResidual = NaN(maxInverseIt,1);
@@ -121,14 +174,18 @@ for k = 1:maxInverseIt
     uWarm = u;
 
     residual = u(topDof)-dataObs;
-    objective = 0.5*(topWeight'*(residual.^2))/dataNormSquared;
+    dataObjective = 0.5*(topWeight'*(residual.^2))/dataNormSquared;
+    regularization = D*q;
+    regularizationObjective = 0.5*alpha*...
+        (regularization'*regularization);
+    objective = dataObjective+regularizationObjective;
     G = assembleparameterderivative(eqn,q,xBeta,L,Nm);
 
     observationGradient = zeros(size(u));
     observationGradient(topDof) = topWeight.*residual/dataNormSquared;
     observationGradientMaster = eqn.periodicProjection'*observationGradient;
     adjoint = eqn.tangent'\(-observationGradientMaster);
-    gradient = G'*adjoint;
+    gradient = G'*adjoint+alpha*(D'*(D*q));
 
     betaCurrent = exp(q);
     history.objective(k) = objective;
@@ -143,7 +200,8 @@ for k = 1:maxInverseIt
 
     if k == 1
         derivativeCheck = verifyderivatives(q,u,eqn,G,gradient,...
-            dataObs,topWeight,dataNormSquared,pde,option,xBeta,L,topDof);
+            dataObs,topWeight,dataNormSquared,pde,option,xBeta,L,topDof,...
+            D,alpha);
         optimizationForwardSolves = optimizationForwardSolves+...
             derivativeCheck.forwardSolves;
     end
@@ -157,7 +215,7 @@ for k = 1:maxInverseIt
     end
 
     hessian = @(direction) gaussnewtonproduct(direction,eqn,G,...
-        topDof,topWeight,dataNormSquared,lambda);
+        topDof,topWeight,dataNormSquared,D,alpha,lambda);
     [step,flag,relativeResidual,pcgIt] = pcg(...
         hessian,-gradient,pcgTolerance,pcgMaxIt);
     if flag ~= 0
@@ -185,8 +243,11 @@ for k = 1:maxInverseIt
             optimizationForwardSolves = optimizationForwardSolves+1;
             if trialInfo.converged
                 trialResidual = uTrial(topDof)-dataObs;
-                trialObjective = 0.5*(topWeight'*(trialResidual.^2))/...
-                    dataNormSquared;
+                trialRegularization = D*qTrial;
+                trialObjective = 0.5*(topWeight'*...
+                    (trialResidual.^2))/dataNormSquared+...
+                    0.5*alpha*(trialRegularization'*...
+                    trialRegularization);
                 if trialObjective < objective
                     q = qTrial;
                     uWarm = uTrial;
@@ -347,7 +408,7 @@ function G = assembleparameterderivative(eqn,q,xBeta,L,Nm)
 end
 
 function product = gaussnewtonproduct(direction,eqn,G,topDof,...
-        topWeight,dataNormSquared,lambda)
+        topWeight,dataNormSquared,D,alpha,lambda)
     incrementalMaster = eqn.tangent\(-G*direction);
     incrementalState = eqn.periodicProjection*incrementalMaster;
     incrementalObservation = zeros(size(incrementalState));
@@ -356,11 +417,12 @@ function product = gaussnewtonproduct(direction,eqn,G,topDof,...
     incrementalObservationMaster = ...
         eqn.periodicProjection'*incrementalObservation;
     incrementalAdjoint = eqn.tangent'\(-incrementalObservationMaster);
-    product = G'*incrementalAdjoint+lambda*direction;
+    product = G'*incrementalAdjoint+alpha*(D'*(D*direction))+...
+        lambda*direction;
 end
 
 function check = verifyderivatives(q,u,eqn,G,gradient,dataObs,topWeight,...
-        dataNormSquared,pde,option,xBeta,L,topDof)
+        dataNormSquared,pde,option,xBeta,L,topDof,D,alpha)
     direction = sin((1:numel(q))');
     direction = direction/norm(direction);
     epsilon = 1e-3;
@@ -374,10 +436,14 @@ function check = verifyderivatives(q,u,eqn,G,gradient,dataObs,topWeight,...
 
     plusResidual = uPlus(topDof)-dataObs;
     minusResidual = uMinus(topDof)-dataObs;
+    plusRegularization = D*(q+epsilon*direction);
+    minusRegularization = D*(q-epsilon*direction);
     plusObjective = 0.5*(topWeight'*(plusResidual.^2))/...
-        dataNormSquared;
+        dataNormSquared+0.5*alpha*...
+        (plusRegularization'*plusRegularization);
     minusObjective = 0.5*(topWeight'*(minusResidual.^2))/...
-        dataNormSquared;
+        dataNormSquared+0.5*alpha*...
+        (minusRegularization'*minusRegularization);
     finiteDifference = (plusObjective-minusObjective)/(2*epsilon);
     adjointDirection = gradient'*direction;
     relativeGradientError = abs(finiteDifference-adjointDirection)/...
@@ -503,4 +569,12 @@ end
 
 function value = defaultlinesearch()
     value = false;
+end
+
+function value = getconfig(config,name,defaultValue)
+    if isfield(config,name)
+        value = config.(name);
+    else
+        value = defaultValue;
+    end
 end

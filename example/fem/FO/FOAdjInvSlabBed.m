@@ -10,13 +10,24 @@ clear variables;
 set(groot,'DefaultFigureVisible','on');
 
 %% Geometry and model
-L = 4;
+% Slab cases.  Toggle exactly one branch to compare how horizontal length
+% affects beta identifiability from top-surface velocity data.
+if 0
+    L = 1;
+    domainCase = 'L1';
+elseif 0
+    L = 2;
+    domainCase = 'L2';
+elseif 1
+    L = 4;
+    domainCase = 'L4';
+end
 H = 1;
 h = 0.1;
 slope = 0.1;
 
-fprintf('FO slab-bed beta inversion: L = %.04e, H = %.04e, h = %.04e\n',...
-    L,H,h);
+fprintf(['FO slab-bed beta inversion case %s: L = %.04e, ',...
+    'H = %.04e, h = %.04e\n'],domainCase,L,H,h);
 
 pde = struct;
 pde.A = 1;
@@ -53,10 +64,40 @@ assert(abs(Nm*h-L) <= 100*eps(max(1,L)),...
 xBeta = (0:Nm-1)'*h;
 xi = mod(xBeta,L)/L;
 
-betaTrue = 2*(1+0.25*cos(2*pi*xi));
-betaTrueName = 'trigonometric';
-betaPerturbation = 0.20*sin(2*pi*xi)+0.05;
-perturbationName = 'trigonometric';
+if 0
+    betaTrue = 2*ones(size(xi));
+    betaTrueName = 'constant';
+elseif 0
+    betaTrue = 2*(0.85+0.30*xi);
+    betaTrueName = 'linear';
+elseif 0
+    betaTrue = 2*(0.9+0.4*(2*xi-1).^2);
+    betaTrueName = 'quadratic';
+elseif 1
+    betaTrue = 2*(1+0.25*cos(2*pi*xi));
+    betaTrueName = 'trigonometric';
+elseif 0
+    betaTrue = 2*(1+0.20*cos(2*pi*xi)+0.10*sin(4*pi*xi));
+    betaTrueName = 'mixed trigonometric';
+end
+
+if 0
+    betaPerturbation = 0.15*ones(size(xi));
+    perturbationName = 'constant';
+elseif 0
+    betaPerturbation = 0.05+0.15*xi;
+    perturbationName = 'linear';
+elseif 0
+    betaPerturbation = 0.20*((2*xi-1).^2-1/3)+0.05;
+    perturbationName = 'quadratic';
+elseif 1
+    betaPerturbation = 0.20*sin(2*pi*xi)+0.05;
+    perturbationName = 'trigonometric';
+elseif 0
+    betaPerturbation = 0.15*sin(2*pi*xi)+...
+        0.08*cos(4*pi*xi)+0.05;
+    perturbationName = 'mixed trigonometric';
+end
 
 betaInitial = betaTrue.*(1+betaPerturbation);
 qTrue = log(betaTrue);
