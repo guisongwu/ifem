@@ -144,6 +144,7 @@ pcgTolerance = 1e-8;
 pcgMaxIt = 50;
 stepTolerance = 1e-7;
 gradientTolerance = 1e-9;
+useLineSearch = defaultlinesearch();
 
 history.objective = NaN(maxInverseIt,1);
 history.dataResidual = NaN(maxInverseIt,1);
@@ -231,36 +232,52 @@ for k = 1:maxInverseIt
         break
     end
 
-    accepted = false;
-    stepLength = 1;
     lineSearchCount = 0;
-    for lineSearchIt = 1:10
-        lineSearchCount = lineSearchCount+1;
-        qTrial = q+stepLength*step;
-        % Every trial step requires a nonlinear forward solve.  These solves
-        % are counted separately in optimizationForwardSolves.
+    if useLineSearch
+        accepted = false;
+        stepLength = 1;
+        for lineSearchIt = 1:10
+            lineSearchCount = lineSearchCount+1;
+            qTrial = q+stepLength*step;
+            % Every trial step requires a nonlinear forward solve.  These solves
+            % are counted separately in optimizationForwardSolves.
+            [uTrial,~,trialInfo] = solveforward(qTrial,u,pde,option,...
+                node,elem,bdFlag,xBeta,L);
+            optimizationForwardSolves = optimizationForwardSolves+1;
+            if trialInfo.converged
+                trialResidual = uTrial(topDof)-dataObs;
+                trialObjective = 0.5*(topWeight'*(trialResidual.^2)) ...
+                    /dataNormSquared;
+                if trialObjective < objective
+                    q = qTrial;
+                    uWarm = uTrial;
+                    lambda = max(lambda/3,1e-12);
+                    accepted = true;
+                    break
+                end
+            end
+            stepLength = stepLength/2;
+        end
+
+        if ~accepted
+            lambda = 10*lambda;
+            warning('iFEM:NonlinearAdjointNoStep',...
+                'No decreasing step was found; increasing LM damping.');
+        end
+    else
+        qTrial = q+step;
         [uTrial,~,trialInfo] = solveforward(qTrial,u,pde,option,...
             node,elem,bdFlag,xBeta,L);
         optimizationForwardSolves = optimizationForwardSolves+1;
         if trialInfo.converged
-            trialResidual = uTrial(topDof)-dataObs;
-            trialObjective = 0.5*(topWeight'*(trialResidual.^2)) ...
-                /dataNormSquared;
-            if trialObjective < objective
-                q = qTrial;
-                uWarm = uTrial;
-                lambda = max(lambda/3,1e-12);
-                accepted = true;
-                break
-            end
+            q = qTrial;
+            uWarm = uTrial;
+            lambda = max(lambda/3,1e-12);
+        else
+            lambda = 10*lambda;
+            warning('iFEM:NonlinearAdjointNoStep',...
+                'Undamped Gauss-Newton trial did not converge.');
         end
-        stepLength = stepLength/2;
-    end
-
-    if ~accepted
-        lambda = 10*lambda;
-        warning('iFEM:NonlinearAdjointNoStep',...
-            'No decreasing step was found; increasing LM damping.');
     end
 
     printiterationrow(k,objective,history.parameterErrorLinf(k),...
@@ -327,6 +344,17 @@ title('\beta error history');
 
 figure(3);
 set(gcf,'Visible','on');
+iteration = 1:numel(history.objective);
+semilogy(iteration,history.objective,'o-',...
+    'LineWidth',1.4,'DisplayName','objective');
+grid on;
+xlabel('inverse iteration');
+ylabel('objective');
+legend('Location','best');
+title('objective history');
+
+figure(4);
+set(gcf,'Visible','on');
 [uRecovered,~,~,pRecovered] = solveforward(q,uWarm,pde,option,...
     node,elem,bdFlag,xBeta,L);
 plot(xObs,dataObs,'ko',xObs,uRecovered(topDof),'r-',...
@@ -336,7 +364,7 @@ xlabel('x');
 ylabel('surface horizontal velocity');
 legend('observation','recovered prediction','Location','best');
 
-figure(4);
+figure(5);
 set(gcf,'Visible','on');
 velocityXNode = uRecovered(1:N);
 velocityYNode = uRecovered(Nu+(1:N));
@@ -546,4 +574,8 @@ function history = trimhistory(history,k)
     for j = 1:numel(fields)
         history.(fields{j}) = history.(fields{j})(1:k,:);
     end
+end
+
+function value = defaultlinesearch()
+    value = false;
 end

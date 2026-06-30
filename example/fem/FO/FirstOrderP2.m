@@ -29,14 +29,25 @@ option = setoption(option,'edgequadorder',3);
 option = setoption(option,'printlevel',1);
 option = setoption(option,'periodic_x',[0,option.L]);
 option = setoption(option,'periodic_tol',1e-10);
+option = setoption(option,'assemble_tangent',false);
 option = setoption(option,'residual_tol',option.tol);
 option = setoption(option,'residual_check_threshold',...
     max(1e-2,sqrt(option.residual_tol)));
 
-box = [0,option.L,0,option.H];
-[node,elem] = rectmesh2(box,option.h);
-bdFlag = setboundary(node,elem,'Neumann','y==1','Robin','y==0');
-node(:,2) = node(:,2)-option.slope*node(:,1);
+if isfield(option,'node') && isfield(option,'elem')
+    node = option.node;
+    elem = option.elem;
+    if isfield(option,'bdFlag')
+        bdFlag = option.bdFlag;
+    else
+        bdFlag = setboundary(node,elem,'Neumann','y==1','Robin','y==0');
+    end
+else
+    box = [0,option.L,0,option.H];
+    [node,elem] = rectmesh2(box,option.h);
+    bdFlag = setboundary(node,elem,'Neumann','y==1','Robin','y==0');
+    node(:,2) = node(:,2)-option.slope*node(:,1);
+end
 
 pde.A = getoption(option,'A',1);
 pde.n = getoption(option,'n',3);
@@ -62,6 +73,10 @@ Nmaster = length(periodicMasterDof);
 Pperiodic = sparse((1:Ndof)',scalarMaster,1,Ndof,Nmaster);
 
 masterState = zeros(Nmaster,1);
+if isfield(option,'u0') && numel(option.u0) == Ndof
+    masterState = accumarray(scalarMaster,option.u0(:),...
+        [Nmaster,1],@mean);
+end
 state = Pperiodic*masterState;
 residual = zeros(option.maxIt,1);
 equationResidual = NaN(option.maxIt,1);
@@ -121,8 +136,16 @@ soln.p = pDiagnostic;
 eqn.A = A;
 eqn.edge = edge;
 eqn.elem2dof = elem2dof;
+eqn.dofNode = dofNode;
 eqn.periodicProjection = Pperiodic;
 eqn.periodicMasterDof = periodicMasterDof;
+
+if option.assemble_tangent
+    Kt = assembleviscoustangent(state);
+    Kbt = assemblebedtangent(state);
+    eqn.tangent = Pperiodic'*(Kt+Kbt)*Pperiodic;
+    eqn.applyBetaDerivative = @assemblebetadirection;
+end
 
 info.itStep = k;
 info.relchange = residual(1:k);
@@ -198,6 +221,7 @@ end
             if isempty(elemIdx), continue; end
             edgeDof = elem2dof(elemIdx,edgelocaldof(e));
             edgeLength = localedgelength(elemIdx,e);
+            tangentX = localedgetangentx(elemIdx,e);
             for q = 1:length(w)
                 lambdaEdge = edgelambda(e,s(q));
                 phi = p2basis(lambdaEdge);
@@ -205,7 +229,10 @@ end
                 xq = evalpoint(lambdaEdge,elemIdx);
                 beta = coefficient(pde.beta,xq);
                 uq = uk(edgeDof)*edgePhi';
-                gamma = beta.*(uq.^2+option.eps_reg^2).^((pde.m-1)/2);
+                tangentialU = uq.*tangentX;
+                gamma = beta.*...
+                    (tangentialU.^2+option.eps_reg^2).^...
+                    ((pde.m-1)/2).*tangentX.^2;
                 if q == ceil(length(w)/2)
                     coefAtEdge(coefCounter+(1:length(elemIdx))) = gamma;
                     coefCounter = coefCounter+length(elemIdx);
@@ -221,6 +248,123 @@ end
             end
         end
         Ab = sparse(double(ii),double(jj),ss,Ndof,Ndof);
+    end
+
+    function At = assembleviscoustangent(uk)
+        [lambda,w] = quadpts(option.quadorder);
+        rows = zeros(size(lambda,1)*36*NT,1);
+        cols = zeros(size(lambda,1)*36*NT,1);
+        vals = zeros(size(lambda,1)*36*NT,1);
+        cursor = 0;
+        for q = 1:size(lambda,1)
+            Dphi = p2gradient(lambda(q,:),Dlambda);
+            gradU = evalgrad(uk,elem2dof,Dphi);
+            ux = gradU(:,1);
+            uz = gradU(:,2);
+            epsII = ux.^2+0.25*uz.^2;
+            xq = evalpoint(lambda(q,:));
+            Aq = coefficient(pde.A,xq);
+            nq = coefficient(pde.n,xq);
+            strain = epsII+option.eps_reg^2;
+            exponent = (1-nq)./(2*nq);
+            eta = 0.5.*Aq.^(-1./nq).*strain.^exponent;
+            for a = 1:6
+                da = Dphi(:,:,a);
+                stateTest = 4*ux.*da(:,1)+uz.*da(:,2);
+                for b = 1:6
+                    db = Dphi(:,:,b);
+                    strainProduct = 4*da(:,1).*db(:,1)+...
+                        da(:,2).*db(:,2);
+                    stateDirection = 2*ux.*db(:,1)+0.5*uz.*db(:,2);
+                    kab = w(q)*area.*eta.*...
+                        (strainProduct+...
+                         exponent./strain.*stateTest.*stateDirection);
+                    idx = cursor+(1:NT);
+                    rows(idx) = elem2dof(:,a);
+                    cols(idx) = elem2dof(:,b);
+                    vals(idx) = kab;
+                    cursor = cursor+NT;
+                end
+            end
+        end
+        At = sparse(rows,cols,vals,Ndof,Ndof);
+    end
+
+    function Abt = assemblebedtangent(uk)
+        Abt = sparse(Ndof,Ndof);
+        if ~any(bdFlag(:)==3), return; end
+        [s,w] = gaussedge(option.edgequadorder);
+        ii = [];
+        jj = [];
+        ss = [];
+        exponent = (pde.m-1)/2;
+        for e = 1:3
+            elemIdx = find(bdFlag(:,e)==3);
+            if isempty(elemIdx), continue; end
+            edgeDof = elem2dof(elemIdx,edgelocaldof(e));
+            edgeLength = localedgelength(elemIdx,e);
+            tangentX = localedgetangentx(elemIdx,e);
+            for q = 1:length(w)
+                lambdaEdge = edgelambda(e,s(q));
+                phi = p2basis(lambdaEdge);
+                edgePhi = phi(edgelocaldof(e));
+                xq = evalpoint(lambdaEdge,elemIdx);
+                beta = coefficient(pde.beta,xq);
+                uq = uk(edgeDof)*edgePhi';
+                tangentialU = uq.*tangentX;
+                speed = tangentialU.^2+option.eps_reg^2;
+                tangentCoefficient = beta.*...
+                    tangentX.^2.*...
+                    (speed.^exponent+(pde.m-1)*tangentialU.^2.*...
+                    speed.^(exponent-1));
+                for a = 1:3
+                    for b = 1:3
+                        sAb = w(q)*edgeLength.*tangentCoefficient*...
+                            edgePhi(a)*edgePhi(b);
+                        ii = [ii;edgeDof(:,a)]; %#ok<AGROW>
+                        jj = [jj;edgeDof(:,b)]; %#ok<AGROW>
+                        ss = [ss;sAb]; %#ok<AGROW>
+                    end
+                end
+            end
+        end
+        Abt = sparse(double(ii),double(jj),ss,Ndof,Ndof);
+    end
+
+    function load = assemblebetadirection(betaDirection)
+        fullLoad = zeros(Ndof,1);
+        if ~any(bdFlag(:)==3)
+            load = Pperiodic'*fullLoad;
+            return;
+        end
+        [s,w] = gaussedge(option.edgequadorder);
+        exponent = (pde.m-1)/2;
+        for e = 1:3
+            elemIdx = find(bdFlag(:,e)==3);
+            if isempty(elemIdx), continue; end
+            edgeDof = elem2dof(elemIdx,edgelocaldof(e));
+            edgeLength = localedgelength(elemIdx,e);
+            tangentX = localedgetangentx(elemIdx,e);
+            for q = 1:length(w)
+                lambdaEdge = edgelambda(e,s(q));
+                phi = p2basis(lambdaEdge);
+                edgePhi = phi(edgelocaldof(e));
+                xq = evalpoint(lambdaEdge,elemIdx);
+                deltaBeta = coefficient(betaDirection,xq);
+                uq = state(edgeDof)*edgePhi';
+                tangentialU = uq.*tangentX;
+                tractionDirection = deltaBeta.*...
+                    (tangentialU.^2+option.eps_reg^2).^exponent.*...
+                    uq.*tangentX.^2;
+                for a = 1:3
+                    contribution = w(q)*edgeLength.*...
+                        tractionDirection*edgePhi(a);
+                    fullLoad = fullLoad+accumarray(...
+                        double(edgeDof(:,a)),contribution,[Ndof,1]);
+                end
+            end
+        end
+        load = Pperiodic'*fullLoad;
     end
 
     function F = assembleforce
@@ -270,6 +414,14 @@ end
         v1 = node(elem(elemIdx,localEdge(e,1)),:);
         v2 = node(elem(elemIdx,localEdge(e,2)),:);
         edgeLength = sqrt(sum((v1-v2).^2,2));
+    end
+
+    function tangentX = localedgetangentx(elemIdx,e)
+        localEdge = [2 3; 3 1; 1 2];
+        v1 = node(elem(elemIdx,localEdge(e,1)),:);
+        v2 = node(elem(elemIdx,localEdge(e,2)),:);
+        tangent = v2-v1;
+        tangentX = tangent(:,1)./sqrt(sum(tangent.^2,2));
     end
 
     function [wdof,pdof] = diagnosticwp(uk)
