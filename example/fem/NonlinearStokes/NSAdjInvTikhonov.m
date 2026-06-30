@@ -1,4 +1,4 @@
-%% NONLINEARSTOKESADJOINTINVERSION Adjoint inversion for bed beta(x).
+%% NSADJINVTIKHONOV Tikhonov-regularized adjoint inversion for beta(x).
 %
 % The state equation uses nonlinear Glen viscosity and a regularized
 % Weertman sliding law.  The inversion variable is q=log(beta).

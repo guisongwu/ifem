@@ -1,5 +1,5 @@
 function [soln,eqn,info] = NonlinearStokesP2P1(node,elem,bdFlag,pde,option)
-%% NONLINEARSTOKESP2P1_PERIODIC Nonlinear full-Stokes ice-flow model.
+%% NONLINEARSTOKESP2P1 Nonlinear full-Stokes ice-flow model.
 %
 % Solve, in a two-dimensional x-z cross-section,
 %

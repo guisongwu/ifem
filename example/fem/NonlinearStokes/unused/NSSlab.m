@@ -1,4 +1,4 @@
-%% NONLINEARSTOKESSLAB Nonlinear full-Stokes flow in an ice slab.
+%% NSSLAB Nonlinear full-Stokes flow in an ice slab.
 %
 % The physical coordinates are (x,z).  The domain is
 %

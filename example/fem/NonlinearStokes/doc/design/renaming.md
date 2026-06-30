@@ -10,15 +10,17 @@
 | 旧文件名 | 新文件名 |
 |---|---|
 | `NonlinearStokesP2P1.m` | `NonlinearStokesP2P1.m` |
-| `NSSlab.m` | `NSSlab.m` |
-| `NSSlabContinuation.m` | `NSSlabContinuation.m` |
+| `NSSlab.m` | `unused/NSSlab.m` |
+| `NSSlabContinuation.m` | `unused/NSSlabContinuation.m` |
 | `NSMMSData.m` | `NSMMSData.m` |
 | `NSMMS.m` | `NSConverRate.m` |
 | `NSMMSContinuation.m` | `NSEpsContinuation.m` |
-| `NSBetaInversion.m` | `NSBetaInversion.m` |
-| `NSAdjointInversion.m` | `NSAdjointInversion.m` |
-| `NSDiagnosis.m` | `NSDiagnosis.m` |
-| `NSRegression.m` | `NSRegression.m` |
+| `NSBetaInversion.m` | `NSFDInversion.m` |
+| `NSAdjointInversion.m` | `NSAdjInvTikhonov.m` |
+| `NonlinearStokesAdjointInversionSlabBed.m` | `NonlinearStokesAdjInvSlabBed.m` |
+| `NonlinearStokesAdjointInversionSinBed.m` | `NonlinearStokesAdjInvSinBed.m` |
+| `NSDiagnosis.m` | `unused/NSDiagnosis.m` |
+| `NSRegression.m` | `unused/NSRegression.m` |
 
 ## 规则
 
@@ -34,7 +36,7 @@
 重命名后运行：
 
 ```matlab
-NSRegression
+run('unused/NSRegression.m')
 ```
 
 并确认 MATLAB `which` 解析到所有新文件名。

@@ -1,4 +1,4 @@
-%% NONLINEARSTOKESREGRESSION Full nonlinear Stokes regression suite.
+%% NSREGRESSION Full nonlinear Stokes regression suite.
 %
 % Run from the iFEM root after setpath:
 %
@@ -158,7 +158,7 @@ assert(norm(stage.soln.p-ice{1}.soln.p)/norm(ice{1}.soln.p)<1e-8,...
 fprintf('Forward, pressure, MMS, and continuation checks passed.\n');
 
 %% Adjoint inversion and derivative checks
-NSAdjointInversion;
+NSAdjInvTikhonov;
 assert(all(isfinite(history.objective)),...
     'Adjoint inversion objective contains NaN or Inf.');
 assert(all(diff(history.objective)<=1e-12),...
@@ -171,10 +171,10 @@ assert(derivativeCheck.gaussNewtonError<1e-4,...
     'Gauss-Newton derivative check failed.');
 
 %% Finite-difference inversion stability
-NSBetaInversion;
+NSFDInversion;
 assert(all(isfinite(history.objective)),...
     'Finite-difference inversion objective contains NaN or Inf.');
-assert(all(isfinite(history.dataMisfit)),...
+assert(all(isfinite(history.dataResidual)),...
     'Finite-difference inversion data misfit contains NaN or Inf.');
 assert(all(diff(history.objective)<=1e-12),...
     'Finite-difference inversion objective is not monotonically decreasing.');

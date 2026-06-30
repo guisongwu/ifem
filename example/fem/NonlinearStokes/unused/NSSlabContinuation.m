@@ -1,4 +1,4 @@
-%% NONLINEARSTOKESSLABCONTINUATION Continuation for an ice slab.
+%% NSSLABCONTINUATION Continuation for an ice slab.
 %
 % Reduce eps_reg one decade at a time.  Each converged velocity is used as
 % the initial guess for the next nonlinear solve on the same mesh.

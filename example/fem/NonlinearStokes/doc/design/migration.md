@@ -17,16 +17,16 @@ example/fem/NonlinearStokes/
 迁移：
 
 - `NonlinearStokesP2P1.m`
-- `NSSlab.m`
-- `NSSlabContinuation.m`
+- `unused/NSSlab.m`
+- `unused/NSSlabContinuation.m`
 - `NSMMSData.m`
 - `NSConverRate.m`
 - `NSEpsContinuation.m`
-- `NSBetaInversion.m`
-- `NSAdjointInversion.m`
-- `NSDiagnosis.m`
+- `NSFDInversion.m`
+- `NSAdjInvTikhonov.m`
+- `unused/NSDiagnosis.m`
 - `diagnose_nonlinear_stokes_inversion_result.mat`
-- `NSRegression.m`
+- `unused/NSRegression.m`
 - 非线性 Stokes 相关 Markdown 文档。
 
 保留在 `Stokes/`：
@@ -53,7 +53,7 @@ example/fem/NonlinearStokes/
 迁移完成后执行：
 
 ```matlab
-NSRegression
+run('unused/NSRegression.m')
 ```
 
 并检查：

@@ -1,4 +1,4 @@
-%% NONLINEARSTOKESDIAGNOSIS Fair n=1 versus n=3 comparison.
+%% NSDIAGNOSIS Fair n=1 versus n=3 comparison.
 %
 % Keep the geometry, mesh, bed parameter, initial guess, observations and
 % optimization settings fixed.  Change only Glen's exponent n.

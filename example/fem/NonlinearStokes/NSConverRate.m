@@ -54,9 +54,7 @@ rateU = [NaN;log(errU(1:end-1)./errU(2:end))/log(2)];
 rateP = [NaN;log(errP(1:end-1)./errP(2:end))/log(2)];
 
 fprintf('\n');
-disp(table(hlist,errU,rateU,errP,rateP,iteration,...
-    'VariableNames',{'h','velocityL2','velocityRate',...
-                     'pressureL2','pressureRate','PicardSteps'}));
+printsummary(hlist,errU,rateU,errP,rateP,iteration);
 
 figure;
 loglog(hlist,errU,'o-',hlist,errP,'s-','LineWidth',1.5);
@@ -66,3 +64,21 @@ xlabel('h');
 ylabel('L^2 error');
 legend('velocity','pressure','Location','northwest');
 title('Manufactured-solution convergence');
+
+function printsummary(hlist,errU,rateU,errP,rateP,iteration)
+fprintf('%10s  %12s  %7s  %12s  %7s  %4s\n',...
+    'h','velocityL2','uRate','pressureL2','pRate','it');
+for k = 1:length(hlist)
+    fprintf('%10.5f  %12.4e  %7s  %12.4e  %7s  %4d\n',...
+        hlist(k),errU(k),ratestr(rateU(k)),errP(k),...
+        ratestr(rateP(k)),iteration(k));
+end
+end
+
+function value = ratestr(rate)
+if isnan(rate)
+    value = '  --  ';
+else
+    value = sprintf('%7.2f',rate);
+end
+end

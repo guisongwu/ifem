@@ -1,7 +1,7 @@
-%% NONLINEARSTOKESDERIVATIVECOMPARISON Compare FD and adjoint derivatives.
+%% NSDERIVATIVECOMPARISON Compare FD and adjoint derivatives.
 %
-% This script uses the same setup as
-% NonlinearStokesAdjointInversionBoundaryObjective.m and compares
+% This script uses the same setup as NonlinearStokesAdjInvSlabBed.m and
+% compares
 %
 %   1. the objective gradient from centered finite differences and the
 %      nonlinear adjoint equation;

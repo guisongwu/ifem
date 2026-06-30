@@ -1,7 +1,7 @@
-%% NONLINEARSTOKESADJOINTINVERSIONSLABBED Adjoint beta inversion on a slab bed.
+%% NONLINEARSTOKESADJINVSLABBED Adjoint beta inversion on a slab bed.
 %
 % This is a flat/sloping slab-bed counterpart of
-% NonlinearStokesAdjointInversionSinBed.m.  It uses the same
+% NonlinearStokesAdjInvSinBed.m.  It uses the same
 % boundary-integral objective and the same manual if/elseif case switches
 % for beta truth and initial perturbation.
 %

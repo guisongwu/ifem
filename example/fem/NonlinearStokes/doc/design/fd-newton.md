@@ -2,8 +2,8 @@
 
 ## Understanding
 
-- Rebuild `NSBetaInversion.m` as a strict comparison with
-  `NSAdjointInversion.m`.
+- Rebuild `NSFDInversion.m` as a strict comparison with
+  `NonlinearStokesAdjInvSlabBed.m`.
 - Match its geometry, mesh, PDE coefficients, observations, true parameter,
   initial parameter, objective, regularization, LM damping, line search, and
   stopping criteria.

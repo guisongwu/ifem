@@ -1,7 +1,7 @@
-%% NONLINEARSTOKESADJOINTINVERSIONSINBED Invert beta on a sinusoidal bed.
+%% NONLINEARSTOKESADJINVSINBED Invert beta on a sinusoidal bed.
 %
-% This script follows NonlinearStokesAdjointInversionBoundaryObjective.m,
-% but uses an ISMIP-HOM-B-like sinusoidal bed and a sliding basal boundary.
+% This script follows NonlinearStokesAdjInvSlabBed.m, but uses an
+% ISMIP-HOM-B-like sinusoidal bed and a sliding basal boundary.
 % Synthetic top-surface velocity data are generated on the same discrete
 % geometry and then used to recover the periodic basal friction coefficient
 % beta.  The inversion variable is q=log(beta).

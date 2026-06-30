@@ -36,7 +36,7 @@ udofNode = [node; (node(eqn.edge(:,1),:)+node(eqn.edge(:,2),:))/2];
 speedDof = sqrt(soln.u.^2+soln.v.^2);
 speedNode = speedDof(1:N);
 
-fig1 = figure('Name','FO P2 boundary speed');
+fig1 = figure('Name','boundary speed');
 [~,bdFace] = findboundary3(elem);
 trisurf(bdFace,node(:,1),node(:,2),node(:,3),speedNode,...
     'EdgeColor',[0.65 0.65 0.65],'FaceColor','interp');
@@ -58,7 +58,7 @@ us = Fu(xs,ys,zs);
 vs = Fv(xs,ys,zs);
 speeds = sqrt(us.^2+vs.^2);
 
-fig2 = figure('Name','FO P2 mid-slice speed');
+fig2 = figure('Name','mid-slice speed');
 surf(xs,ys,zs,speeds,'EdgeColor','none');
 axis equal tight;
 view(2);
@@ -78,7 +78,7 @@ quiver3(xs(1:stride:end,1:stride:end),...
 hold off;
 exportfigure(fig2,outputDir,'NonlinearFOP2-mid-slice-speed.png',exportPng);
 
-fig3 = figure('Name','FO P2 exact-vs-numerical slice error');
+fig3 = figure('Name','exact-vs-numerical slice error');
 exactSlice = foexact([xs(:),ys(:),zs(:)]);
 exactSpeed = reshape(sqrt(exactSlice(:,1).^2+exactSlice(:,2).^2),ns,ns);
 surf(xs,ys,zs,abs(speeds-exactSpeed),'EdgeColor','none');

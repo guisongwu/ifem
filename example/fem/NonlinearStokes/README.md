@@ -24,10 +24,11 @@ setpath
 建议按以下顺序了解和验证程序：
 
 ```matlab
-NSSlab          % 冰层正问题
 NSConverRate    % 制造解收敛阶测试
-NSAdjointInversion
-NSRegression    % 完整回归测试
+NSEpsContinuation
+NSAdjInvTikhonov
+NonlinearStokesAdjInvSlabBed
+NSFDInversion
 ```
 
 ## 核心求解器
@@ -92,24 +93,6 @@ option.pressure_constraint
 - `eqn`：离散矩阵、约束和可选切线算子；
 - `info`：迭代次数、黏度范围、完整残差和压力约束诊断。
 
-## 正问题示例
-
-### `NSSlab.m`
-
-求解倾斜周期冰层上的非线性全 Stokes 正问题，并绘制：
-
-- 压力；
-- 水平速度；
-- 竖直速度。
-
-顶部为零牵引，底部满足不可穿透和 Weertman 滑移条件。
-
-### `NSSlabContinuation.m`
-
-冰层正问题的正则化延拓版本。依次减小
-\(\varepsilon_{\mathrm{reg}}\)，并将前一级解作为下一级初值，用于提高
-强非线性问题的求解稳定性。
-
 ## 制造解验证
 
 ### `NSMMSData.m`
@@ -140,7 +123,7 @@ $$
 
 ## 反问题
 
-### `NSBetaInversion.m`
+### `NSFDInversion.m`
 
 使用表面速度合成观测恢复空间变化的底部摩擦系数
 \(\beta(x)\)。
@@ -156,9 +139,14 @@ $$
 
 该实现直观，适合作为反演基准，但参数维数增加后计算成本较高。
 
-### `NSAdjointInversion.m`
+### `NSAdjInvTikhonov.m`
 
-伴随反演实现，采用：
+带周期一阶差分 Tikhonov 正则化的伴随反演实现，采用一致非线性切线矩阵、
+伴随梯度和矩阵自由 Gauss--Newton 更新。
+
+### `NonlinearStokesAdjInvSlabBed.m`
+
+倾斜平板床上的边界积分目标函数伴随反演。算法采用：
 
 - 一致非线性切线矩阵；
 - 增量状态方程；
@@ -173,47 +161,40 @@ $$
 - 伴随梯度方向导数；
 - Gauss--Newton 方向量。
 
-## 诊断与测试
+### `NonlinearStokesAdjInvSinBed.m`
 
-### `NSDiagnosis.m`
+ISMIP-HOM-B-like 正弦床上的伴随反演脚本，反演变量、观测方式和优化框架与
+`NonlinearStokesAdjInvSlabBed.m` 相同。
 
-在相同几何、参数初值和观测条件下比较 Glen 指数 \(n=1\) 与 \(n=3\)：
+### `NSDerivativeComparison.m`
 
-- 参数 Jacobian 奇异值；
-- 条件数；
-- 参数误差的可观测模式；
-- 最终反演误差。
+独立比较有限差分导数与伴随导数，包括目标函数梯度和 Gauss--Newton Hessian。
 
-### `diagnose_nonlinear_stokes_inversion_result.mat`
+## ISMIP-HOM 示例
 
-`NSDiagnosis.m` 的已保存结果，包括真实参数、初值和两组
-诊断数据。
+### `ISMIPHOM_B.m`
 
-### `NSRegression.m`
+运行二维 flowline 形式的 ISMIP-HOM experiment B，并与官方 full-Stokes 曲线和
+PISM 图中提取的数据比较。
 
-完整 MATLAB 回归测试，覆盖：
+### `ISMIPHOM_D.m`
 
-- 三层冰层网格上的散度和完整残差；
-- 压力约束的 `auto`、`none` 和 `mean-zero` 模式；
-- 无牵引边界下的压力零空间处理；
-- MMS 速度和压力收敛阶；
-- 直接求解与正则化延拓的一致性；
-- 伴随导数检查；
-- 两种反演方法的稳定性和目标函数下降。
+运行二维 flowline 形式的 ISMIP-HOM experiment D，并与官方 full-Stokes 曲线和
+PISM 图中提取的数据比较。
 
-运行：
+### `ISMIPHOM_B_L5Fields.m` 和 `ISMIPHOM_D_L5Fields.m`
 
-```matlab
-NSRegression
-```
+绘制 \(L=5\) km 情形下的速度和压力场。
 
-全部通过时输出：
+## 归档诊断
 
-```text
-All nonlinear Stokes regression checks passed.
-```
+`unused/` 中保留了较早的平板正问题、平板延拓、床面 MMS、诊断和回归脚本：
 
-该测试允许运行数分钟。
+- `unused/NSSlab.m`
+- `unused/NSSlabContinuation.m`
+- `unused/NSConverRateBed.m`
+- `unused/NSDiagnosis.m`
+- `unused/NSRegression.m`
 
 ## 技术文档
 
@@ -247,8 +228,8 @@ All nonlinear Stokes regression checks passed.
 
 ```matlab
 NSConverRate
-NSSlab
-NSRegression
+NSEpsContinuation
+NSDerivativeComparison
 ```
 
 重点检查：

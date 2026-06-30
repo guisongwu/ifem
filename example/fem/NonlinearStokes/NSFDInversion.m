@@ -1,8 +1,8 @@
-%% NSBETAINVERSION Finite-difference beta inversion on a slab bed.
+%% NSFDINVERSION Finite-difference beta inversion on a slab bed.
 %
 % This script uses the same slab-bed test cases, boundary-integral
 % objective, beta truth choices, initial perturbation choices, and
-% visualization style as NonlinearStokesAdjointInversionSlabBed.m.
+% visualization style as NonlinearStokesAdjInvSlabBed.m.
 % Its intentional algorithmic difference is that centered finite
 % differences of the complete reduced objective provide both the gradient
 % and full Hessian.

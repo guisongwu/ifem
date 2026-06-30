@@ -1,9 +1,9 @@
-# `NonlinearStokesAdjointInversionBoundaryObjective.m` 详解
+# `NonlinearStokesAdjInvSlabBed.m` 详解
 
 本文解释脚本
 
 ```text
-example/fem/NonlinearStokes/NonlinearStokesAdjointInversionBoundaryObjective.m
+example/fem/NonlinearStokes/NonlinearStokesAdjInvSlabBed.m
 ```
 
 的目的、数学含义、代码结构和主要输出。
@@ -35,7 +35,7 @@ $$
 
 ## 1. 脚本整体目标
 
-脚本开头注释说明它是从 `NSAdjointInversion.m` 修改而来，主要区别是目标函数换成了顶部边界积分误差：
+脚本开头注释说明它是 `NSAdjInvTikhonov.m` 的边界积分目标函数版本，主要区别是目标函数换成了顶部边界积分误差：
 
 $$
 J(q)
@@ -1322,11 +1322,11 @@ $$
 
 ## 22. 和其他脚本的关系
 
-### `NSDiagnosis.m`
+### `unused/NSDiagnosis.m`
 
 这个脚本用于诊断不同 Glen 指数下的反演问题，并使用有限差分 Jacobian 做 SVD 分析。它更适合理解问题病态性和观测可辨识性。
 
-相比之下，`NonlinearStokesAdjointInversionBoundaryObjective.m` 使用伴随梯度和矩阵自由 Gauss--Newton，更接近实际反演算法。
+相比之下，`NonlinearStokesAdjInvSlabBed.m` 使用伴随梯度和矩阵自由 Gauss--Newton，更接近实际反演算法。
 
 ### `NSDerivativeComparison.m`
 
@@ -1335,7 +1335,7 @@ $$
 - FD 梯度与伴随梯度是否一致；
 - FD 构造的 Gauss--Newton Hessian 与 tangent/adjoint 构造是否一致。
 
-它是对 `NonlinearStokesAdjointInversionBoundaryObjective.m` 中导数实现的独立检查。
+它是对 `NonlinearStokesAdjInvSlabBed.m` 中导数实现的独立检查。
 
 ### `NonlinearStokesP2P1.m`
 
@@ -1425,8 +1425,8 @@ pcg(hessian,-gradient,...)
 
 顶部速度观测不一定能完全区分所有底部参数模式。某些 $\beta$ 的变化对顶部速度影响很弱，导致数据拟合已经很好，但参数仍有误差。
 
-这也是 `NSDiagnosis.m` 做 SVD 诊断的原因。
+这也是 `unused/NSDiagnosis.m` 做 SVD 诊断的原因。
 
 ## 24. 一句话总结
 
-`NonlinearStokesAdjointInversionBoundaryObjective.m` 是一个基于顶部边界速度积分误差的非线性 Stokes 底部滑移反演脚本。它用 Picard 方法求正问题，用一致切线矩阵解伴随方程得到梯度，用矩阵自由 Gauss--Newton/LM 方法计算更新步，并通过 line search 保证目标函数下降。
+`NonlinearStokesAdjInvSlabBed.m` 是一个基于顶部边界速度积分误差的非线性 Stokes 底部滑移反演脚本。它用 Picard 方法求正问题，用一致切线矩阵解伴随方程得到梯度，用矩阵自由 Gauss--Newton/LM 方法计算更新步，并通过 line search 保证目标函数下降。

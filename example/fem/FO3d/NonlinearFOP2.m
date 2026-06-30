@@ -20,7 +20,8 @@ function [soln,eqn,info] = NonlinearFOP2(node,elem,bdFlag,pde,option)
 %
 % Important options:
 %   option.tol, option.maxIt, option.damping, option.eps_reg,
-%   option.quadorder, option.printlevel, option.bed_condition.
+%   option.quadorder, option.printlevel, option.bed_condition,
+%   option.periodic, option.periodicBox.
 
 if nargin < 5, option = struct; end
 option = setoption(option,'tol',1e-8);
@@ -31,6 +32,9 @@ option = setoption(option,'quadorder',4);
 option = setoption(option,'facequadorder',4);
 option = setoption(option,'printlevel',1);
 option = setoption(option,'bed_condition','sliding');
+option = setoption(option,'periodic',[]);
+option = setoption(option,'periodicBox',[]);
+option = setoption(option,'periodic_tol',1e-10);
 option = setoption(option,'residual_tol',option.tol);
 option = setoption(option,'residual_check_threshold',...
     max(1e-2,sqrt(option.residual_tol)));
@@ -64,6 +68,12 @@ NT = size(elem,1);
 NE = size(edge,1);
 Ndof = N+NE;
 udofNode = [node; (node(edge(:,1),:)+node(edge(:,2),:))/2];
+[periodicRep,periodicInfo] = periodicrepresentatives(udofNode,option);
+[periodicMasterDof,~,scalarMaster] = unique(periodicRep);
+NscalarMaster = length(periodicMasterDof);
+state2master = [scalarMaster; NscalarMaster+scalarMaster];
+Nmaster = 2*NscalarMaster;
+Pperiodic = sparse((1:2*Ndof)',state2master,1,2*Ndof,Nmaster);
 
 if isempty(bdFlag)
     bdFlag = zeros(NT,4,'uint8');
@@ -77,13 +87,27 @@ if strcmp(bedCondition,'no-slip')
 end
 dirichletDof = dirichletDof(:);
 fixedDof = [dirichletDof; Ndof+dirichletDof];
-freeDof = setdiff((1:2*Ndof)',fixedDof);
+fixedMaster = unique(state2master(fixedDof));
+freeMaster = setdiff((1:Nmaster)',fixedMaster);
+freeDof = find(ismember(state2master,freeMaster));
 
 state = zeros(2*Ndof,1);
 state(fixedDof) = dirichletvalue(dirichletDof);
+masterState = zeros(Nmaster,1);
+if ~isempty(fixedDof)
+    masterState(fixedMaster) = accumarray(state2master(fixedDof),...
+        state(fixedDof),[Nmaster,1],@mean,0);
+end
+state = Pperiodic*masterState;
 if isfield(option,'u0') && numel(option.u0) == 2*Ndof
-    state(freeDof) = option.u0(freeDof);
+    masterState = accumarray(state2master,option.u0(:),[Nmaster,1],@mean,0);
+    state = Pperiodic*masterState;
     state(fixedDof) = dirichletvalue(dirichletDof);
+    if ~isempty(fixedDof)
+        masterState(fixedMaster) = accumarray(state2master(fixedDof),...
+            state(fixedDof),[Nmaster,1],@mean,0);
+    end
+    state = Pperiodic*masterState;
 end
 
 residual = zeros(option.maxIt,1);
@@ -99,19 +123,23 @@ for k = 1:option.maxIt
     F = assembleforce;
     F = addtraction(F);
     A = A+Ab;
+    Ared = Pperiodic'*A*Pperiodic;
+    Fred = Pperiodic'*F;
 
-    rhs = F-A(:,fixedDof)*state(fixedDof);
-    newState = state;
-    newState(freeDof) = A(freeDof,freeDof)\rhs(freeDof);
-    newState(fixedDof) = state(fixedDof);
+    rhs = Fred-Ared(:,fixedMaster)*masterState(fixedMaster);
+    newMasterState = masterState;
+    newMasterState(freeMaster) = Ared(freeMaster,freeMaster)\rhs(freeMaster);
+    newMasterState(fixedMaster) = masterState(fixedMaster);
 
     alpha = option.damping;
-    updatedState = state;
-    updatedState(freeDof) = (1-alpha)*state(freeDof)+...
-        alpha*newState(freeDof);
-    updatedState(fixedDof) = state(fixedDof);
+    updatedMasterState = masterState;
+    updatedMasterState(freeMaster) = (1-alpha)*masterState(freeMaster)+...
+        alpha*newMasterState(freeMaster);
+    updatedMasterState(fixedMaster) = masterState(fixedMaster);
+    updatedState = Pperiodic*updatedMasterState;
 
     residual(k) = norm(updatedState-state)/max(1,norm(updatedState));
+    masterState = updatedMasterState;
     state = updatedState;
     viscosityRange(k,:) = [etaMin,etaMax];
 
@@ -153,6 +181,7 @@ info.solveTime = cputime-t0;
 info.bedCoefficient = bedCoefficient;
 info.bedCondition = bedCondition;
 info.dirichletDof = dirichletDof;
+info.periodic = periodicInfo;
 
 soln.u = state(1:Ndof);
 soln.v = state(Ndof+1:end);
@@ -163,6 +192,9 @@ eqn.edge = edge;
 eqn.elem2dof = elem2dof;
 eqn.freeDof = freeDof;
 eqn.fixedDof = fixedDof;
+eqn.periodicProjection = Pperiodic;
+eqn.freeMaster = freeMaster;
+eqn.fixedMaster = fixedMaster;
 
     function [A,etaMin,etaMax] = assembleviscous(uk)
         [lambda,w] = quadpts3(option.quadorder);
@@ -322,8 +354,9 @@ eqn.fixedDof = fixedDof;
         Fres = assembleforce;
         Fres = addtraction(Fres);
         Ares = Kres+Kbres;
-        r = Ares*uk-Fres;
-        res = norm(r(freeDof))/max(1,norm(Fres(freeDof)));
+        r = Pperiodic'*(Ares*uk-Fres);
+        FredRes = Pperiodic'*Fres;
+        res = norm(r(freeMaster))/max(1,norm(FredRes(freeMaster)));
     end
 
     function dof = finddirichletdof
@@ -489,4 +522,51 @@ end
 
 function option = setoption(option,name,value)
 if ~isfield(option,name), option.(name) = value; end
+end
+
+function [rep,info] = periodicrepresentatives(dofNode,option)
+Ndof = size(dofNode,1);
+rep = (1:Ndof)';
+info.enabled = false;
+info.directions = [];
+info.masterDof = rep;
+if ~isfield(option,'periodic') || isempty(option.periodic) || ...
+        (islogical(option.periodic) && ~any(option.periodic))
+    return;
+end
+if isempty(option.periodicBox)
+    error('iFEM:FOPeriodicBox',...
+        'option.periodicBox is required when option.periodic is set.');
+end
+periodic = option.periodic;
+if islogical(periodic)
+    periodic = find(periodic);
+end
+box = option.periodicBox;
+if isvector(box)
+    box = reshape(box,2,[])';
+end
+if size(box,1) == 2 && size(box,2) == 3
+    box = box';
+end
+if size(box,1) ~= 3 || size(box,2) ~= 2
+    error('iFEM:FOPeriodicBox',...
+        'option.periodicBox must be a 3-by-2 array or [x0 x1 y0 y1 z0 z1].');
+end
+tol = option.periodic_tol;
+key = dofNode;
+for d = periodic(:)'
+    lower = box(d,1);
+    upper = box(d,2);
+    isUpper = abs(key(:,d)-upper) <= tol*max(1,abs(upper-lower));
+    key(isUpper,d) = lower;
+end
+key = round(key/tol);
+[~,ia,ic] = unique(key,'rows');
+rep = ia(ic);
+info.enabled = true;
+info.directions = periodic(:)';
+info.masterDof = unique(rep);
+info.numDof = Ndof;
+info.numMasterDof = length(info.masterDof);
 end
