@@ -337,43 +337,22 @@ $$
 \right).
 $$
 
-为什么要令体内伴随算子为零？这里要求
+伴随法要把目标函数变分中的状态增量
+$\delta J(\boldsymbol u)[\tilde{\boldsymbol u}]$ 消去。分部积分后，体内所有状态方向项已经集中为
 
 $$
 \left\langle
 (\tilde{\boldsymbol u},\tilde p),
 \mathcal A^*(\boldsymbol v,r)
 \right\rangle
-=0
-\qquad
-\text{对所有 }(\tilde{\boldsymbol u},\tilde p)\text{ 成立}
 $$
 
-不是额外添加的物理条件，而是伴随法的消元要求。直接对约化目标函数 $J(\boldsymbol u(\beta))$ 求方向导数时，会出现状态增量项
-
-$$
-\delta J(\boldsymbol u)[\tilde{\boldsymbol u}].
-$$
-
-而 $(\tilde{\boldsymbol u},\tilde p)$ 是增量正问题的解，依赖参数方向 $\delta\beta$。如果最终公式还含有 $(\tilde{\boldsymbol u},\tilde p)$，就没有达到伴随法“消去状态导数”的目的。
-
-所以我们选择伴随变量 $(\boldsymbol v,r)$，使所有体内的状态方向项都消失。体积分已经被整理成
-
-$$
-\left\langle
-(\tilde{\boldsymbol u},\tilde p),
-\mathcal A^*(\boldsymbol v,r)
-\right\rangle.
-$$
-
-由于状态方向在体内可以任意变化，要让这个内积对所有可能的 $(\tilde{\boldsymbol u},\tilde p)$ 都为零，只能要求它的系数为零，即
+要让最终公式不含未知的 $(\tilde{\boldsymbol u},\tilde p)$，需要这项对任意状态方向都为零。因此取
 
 $$
 \mathcal A^*(\boldsymbol v,r)=0
 \qquad\text{in }\Omega.
 $$
-
-这就是体内伴随方程的来源。换句话说，伴随方程是为了把目标函数变分中的状态增量消掉而选择出来的方程。
 
 代入上面的 $\mathcal A^*$，体内伴随方程为
 
@@ -404,7 +383,7 @@ $$
 
 ## 5. 顶部边界：观测误差成为伴随牵引
 
-在顶部，增量正问题有
+在顶部，增量正问题满足
 
 $$
 \boldsymbol\tau\boldsymbol n=\boldsymbol 0
@@ -419,7 +398,7 @@ $$
 \cdot\tilde{\boldsymbol u}\,ds.
 $$
 
-它要和目标函数变分
+约化目标函数的状态变分为
 
 $$
 \delta J(\boldsymbol u)[\tilde{\boldsymbol u}]
@@ -429,25 +408,7 @@ $$
 \cdot\tilde{\boldsymbol u}\,ds
 $$
 
-相消。这个要求来自伴随法的基本目的：计算约化目标函数 $J(\boldsymbol u(\beta))$ 对参数的导数时，直接变分会出现状态增量项
-
-$$
-\delta J(\boldsymbol u)[\tilde{\boldsymbol u}].
-$$
-
-但 $\tilde{\boldsymbol u}$ 是由增量正问题决定的隐式量。如果每个参数方向都通过 $\tilde{\boldsymbol u}$ 来计算目标函数变化，就失去了伴随法的意义。伴随变量的选择就是为了把所有含 $\tilde{\boldsymbol u}$ 和 $\tilde p$ 的项消掉，最后只留下显式的参数方向项 $\delta\beta$。
-
-经过体内分部积分并施加伴随体方程后，含 $\tilde{\boldsymbol u}$ 的体积分已经消失。顶部还剩两个含 $\tilde{\boldsymbol u}$ 的项：
-
-$$
-\delta J(\boldsymbol u)[\tilde{\boldsymbol u}]
-\quad\text{和}\quad
-\int_{\Gamma_t}
-(\boldsymbol\tau^*\boldsymbol n)
-\cdot\tilde{\boldsymbol u}\,ds.
-$$
-
-如果不让它们相消，最终的 $\delta J$ 公式仍然含有未知的状态增量 $\tilde{\boldsymbol u}$，就没有完成伴随消元。因此要求
+伴随变量的选择要使这个顶部状态增量项被边界项抵消，即
 
 $$
 \delta J(\boldsymbol u)[\tilde{\boldsymbol u}]
@@ -458,7 +419,7 @@ $$
 =0
 $$
 
-对任意顶部速度方向成立。因此
+对任意 $\tilde{\boldsymbol u}$ 成立。于是得到顶部伴随牵引
 
 $$
 \boxed{
@@ -469,20 +430,15 @@ $$
 }
 $$
 
-这里的负号来自“让目标函数变分和伴随边界项相消”的约定。
+这里的负号来自“顶部边界项抵消目标函数变分”的符号约定。
 
 ## 6. 底部边界：滑移算子的伴随和梯度
 
-底部增量速度满足不可穿透条件
+底部增量速度和伴随速度取在同一个不可穿透空间中：
 
 $$
 \tilde{\boldsymbol u}\cdot\boldsymbol n=0
-\qquad\text{on }\Gamma_b.
-$$
-
-伴随速度取在同一个速度空间中：
-
-$$
+\qquad
 \boldsymbol v\cdot\boldsymbol n=0
 \qquad\text{on }\Gamma_b.
 $$
@@ -541,23 +497,7 @@ $$
 }
 $$
 
-其中 $\beta\boldsymbol v_t$ 是线性滑移算子
-
-$$
-\tilde{\boldsymbol u}_t
-\mapsto
-\beta\tilde{\boldsymbol u}_t
-$$
-
-的伴随。原因是 $\beta$ 是标量，切向投影 $\boldsymbol T$ 自伴随：
-
-$$
-(\beta\boldsymbol T\boldsymbol a)\cdot\boldsymbol b
-=
-\boldsymbol a\cdot(\beta\boldsymbol T\boldsymbol b).
-$$
-
-消去 $\tilde{\boldsymbol u}_t$ 后，底部剩下的参数项就是
+消去 $\tilde{\boldsymbol u}_t$ 后，底部只剩参数项
 
 $$
 \int_{\Gamma_b}
@@ -565,7 +505,61 @@ $$
 \boldsymbol u_t\cdot\boldsymbol v_t\,ds.
 $$
 
-因此
+下面说明它为什么就是方向导数。对参数求导时，目标函数应理解为约化目标函数
+
+$$
+J(\beta):=J(\boldsymbol u(\beta)).
+$$
+
+链式法则给出
+
+$$
+\delta J(\beta)[\delta\beta]
+=
+\delta J(\boldsymbol u)[\tilde{\boldsymbol u}].
+$$
+
+其中 $(\tilde{\boldsymbol u},\tilde p)$ 是 $\delta\beta$ 驱动的增量正问题解。增量正问题可写成
+
+$$
+\mathcal A(\tilde{\boldsymbol u},\tilde p)
++
+\mathcal R_\beta[\delta\beta]
+=0,
+$$
+
+其中底部滑移条件中的参数残差是
+
+$$
+\mathcal R_\beta[\delta\beta]
+=
+\delta\beta\,\boldsymbol u_t
+\qquad\text{on }\Gamma_b.
+$$
+
+把增量方程与伴随变量配对并分部积分后，伴随体方程消去体积分，顶部伴随牵引给出 $-\delta J(\boldsymbol u)[\tilde{\boldsymbol u}]$，底部伴随滑移条件消去 $\tilde{\boldsymbol u}_t$。因此配对恒等式化为
+
+$$
+0
+=
+-\delta J(\boldsymbol u)[\tilde{\boldsymbol u}]
++
+\int_{\Gamma_b}
+\delta\beta\,
+\boldsymbol u_t\cdot\boldsymbol v_t\,ds.
+$$
+
+于是
+
+$$
+\delta J(\boldsymbol u)[\tilde{\boldsymbol u}]
+=
+\int_{\Gamma_b}
+\delta\beta\,
+\boldsymbol u_t\cdot\boldsymbol v_t\,ds.
+$$
+
+再由链式法则得到梯度公式
 
 $$
 \delta J(\beta)[\delta\beta]
