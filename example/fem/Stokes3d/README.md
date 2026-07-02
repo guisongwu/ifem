@@ -16,7 +16,7 @@ cd example/fem/Stokes3d
 建议先运行：
 
 ```matlab
-NS3ConverRate
+NSConverRate
 ISMIPHOM_A
 ISMIPHOM_C
 ```
@@ -83,17 +83,17 @@ option.pressure_constraint
 
 ## 制造解验证
 
-### `NS3MMSData.m`
+### `NSMMSData.m`
 
 给出三维制造解、体力和顶部牵引。该解在 y 方向周期且独立于 y，
 可用于检查三维装配、倾斜周期匹配和底面约束。
 
-### `NS3ConverRate.m`
+### `NSConverRate.m`
 
 在多层网格上计算速度和压力的 \(L^2\) 误差并报告收敛阶。压力误差会先
 扣除常数均值差。
 
-解析解、区域、边界条件、正则化参数和当前收敛结果见 `NS3MMS.md`。
+解析解、区域、边界条件、正则化参数和当前收敛结果见 `NSMMS.md`。
 
 ## ISMIP-HOM 示例
 

@@ -13,13 +13,7 @@ set(groot,'DefaultFigureVisible','on');
 %% Geometry and mesh
 % Fixed-thickness cases.  Change L to compare how the horizontal
 % length L affects beta identifiability from top-surface velocity data.
-if 0
-    L = 1;
-elseif 0
-    L = 2;
-elseif 1
-    L = 4;
-end
+L = 5;
 H = 1;
 slope = tan(0.5*pi/180);
 bedAmplitude = 0.1*H;
@@ -63,8 +57,8 @@ option.periodic = true;
 option.periodic_x = [0,L];
 option.eps_reg = 1e-3;
 option.maxIt = 200;
-option.tol = 1e-11;
-option.residual_tol = 1e-11;
+option.tol = 1e-6;
+option.residual_tol = 1e-6;
 option.damping = 0.8;
 option.printlevel = 0;
 option.quadorder = 6;
@@ -180,6 +174,14 @@ for k = 1:maxInverseIt
             pde,option,node,elem,bdFlag,xBeta,L,topDof);
         optimizationForwardSolves = optimizationForwardSolves+...
             derivativeCheck.forwardSolves;
+    end
+
+    if objective < 1e-15
+        printiterationrow(k,objective,history.parameterErrorLinf(k),...
+            history.parameterErrorRelativeLinf(k),norm(gradient),...
+            forwardInfo.itStep,NaN,NaN,0,'obj');
+        history = trimhistory(history,k);
+        break
     end
 
     if norm(gradient) <= gradientTolerance

@@ -1,6 +1,6 @@
 # 3-D Manufactured-Solution Test
 
-本文档说明 `NS3MMSData.m` 和 `NS3ConverRate.m` 使用的三维解析解、计算区域、
+本文档说明 `NSMMSData.m` 和 `NSConverRate.m` 使用的三维解析解、计算区域、
 边界条件、正则化参数和收敛阶结果。
 
 ## 求解区域
@@ -34,9 +34,8 @@ slope = 0.1.
 q = z + slope*x.
 ```
 
-网格由 `cubemesh([0,1,0,1,0,1],h)` 生成，并对内部节点施加一个幅度为
-`0.06*h` 的光滑扰动。扰动在 `xi=0/1`、`eta=0/1`、`zeta=0/1` 上为零，
-因此不会破坏周期边界配对和上下边界位置。
+网格由 `cubemesh([0,1,0,1,0,1],h)` 在参考立方体上生成，然后直接映射到
+上述斜板区域。当前收敛测试不再扰动内部节点，因此使用规则四面体网格。
 
 ## 解析解
 
@@ -112,7 +111,7 @@ sigma n,  sigma = 2 eta epsilon(u) - p I
 
 ## 边界条件
 
-边界标记由 `NS3ConverRate.m` 设置：
+边界标记由 `NSConverRate.m` 设置：
 
 ```matlab
 bdFlag = setboundary3(node,elem,'Neumann','z==1',...
@@ -174,24 +173,30 @@ option.pressure_constraint = 'none';
 cd('/home/wugs/Github/ifem')
 setpath
 cd example/fem/Stokes3d
-NS3ConverRate
+NSConverRate
 ```
 
-`NS3ConverRate.m` 当前默认网格层次为
+`NSConverRate.m` 当前默认网格层次为
 
 ```matlab
-hlist = [1/4;1/6;1/8];
+hlist = [1/2;1/4;1/8];
 ```
+
+由于相邻网格尺寸均为二分加密，脚本用
+
+```matlab
+log2(err(k)/err(k+1))
+```
+
+计算相邻两层的收敛阶。
 
 其中 `n=3` 后非线性 Picard 迭代明显更慢。当前已经完成的 n=3 检查结果为：
 
-| h | velocity L2 | u rate | pressure L2 | p rate | Picard it |
-|---:|---:|---:|---:|---:|---:|
-| 0.16667 | 1.1650e-02 | -- | 6.2590e-02 | -- | 76 |
-| 0.12500 | 4.1900e-03 | 3.55 | 3.1700e-02 | 2.37 | 76 |
-
-更细的 `h=1/10` n=3 算例耗时较长，未作为默认 smoke test 的必跑结果写入表格。
-需要更完整的三点表时，可继续运行默认 `hlist` 或手动加入更细网格。
+| h       | velocity L2 | u rate | pressure L2 | p rate | Picard it |
+| :---:   | :---:       | :---:  | :---:       | :---:  | :---:     |
+| 0.50000 | 1.5070e-01  | --     | 3.9420e-01  | --     | 61        |
+| 0.25000 | 3.6760e-02  | 2.04   | 1.5970e-01  | 1.30   | 62        |
+| 0.12500 | 4.1482e-03  | 3.15   | 3.1674e-02  | 2.33   | 62        |
 
 P2--P1 Taylor--Hood 元的典型期望为
 
@@ -200,5 +205,5 @@ P2--P1 Taylor--Hood 元的典型期望为
 ||p-p_h||_L2 = O(h^2).
 ```
 
-当前已完成的两层 n=3 检查中，速度和压力阶数均高于理论最低阶，量级与
-P2--P1 期望一致。完整定量判断应以三层或更多加密网格为准。
+当前已完成的两层 n=3 检查只能作为规则网格流程的 smoke test。完整定量判断
+应以三层或更多加密网格为准。

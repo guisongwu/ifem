@@ -22,13 +22,7 @@ set(groot,'DefaultFigureVisible','on');
 %% Geometry and mesh
 % Slab cases.  H is fixed; toggle exactly one L branch to compare how
 % horizontal length affects beta identifiability.
-if 0
-    L = 1;
-elseif 0
-    L = 2;
-elseif 1
-    L = 4;
-end
+L = 4;
 H = 1;
 h = 0.1;
 slope = 0.1;
@@ -71,7 +65,7 @@ option.periodic = true;
 option.periodic_x = [0,L];
 option.eps_reg = 1e-3;
 option.maxIt = 200;
-option.tol = 1e-11;
+option.tol = 1e-6;
 option.damping = 0.8;
 option.printlevel = 0;
 option.quadorder = 6;
@@ -203,6 +197,14 @@ for k = 1:maxInverseIt
             pde,option,node,elem,bdFlag,xBeta,L,topDof);
         optimizationForwardSolves = optimizationForwardSolves+...
             derivativeCheck.forwardSolves;
+    end
+
+    if objective < 1e-15
+        printiterationrow(k,objective,history.parameterErrorLinf(k),...
+            history.parameterErrorRelativeLinf(k),norm(gradient),...
+            forwardInfo.itStep,NaN,NaN,0,'obj');
+        history = trimhistory(history,k);
+        break
     end
 
     if norm(gradient) <= gradientTolerance

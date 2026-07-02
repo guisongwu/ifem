@@ -12,13 +12,13 @@ alpha = 0.1*pi/180;
 slope = tan(alpha);
 H = 1000;                   % m
 
-lengthList = 1000*5;        % use 1000*[5;10;20;40;80;160] for a sweep
+lengthList = 1000*[5;10;20;40;80;160];
 officialLength = [5;10;20;40;80;160];
 officialFSMax = [16.00;16.53;19.05;29.32;60.15;143.75];
 officialFSMean = [15.99;16.24;16.84;19.76;27.38;41.68];
 
-Nx = 4;
-Ny = 4;
+Nx = 10;
+Ny = 10;
 Nz = 2;
 
 result = table('Size',[numel(lengthList),7],...
@@ -27,6 +27,7 @@ result = table('Size',[numel(lengthList),7],...
     'VariableNames',{'lengthKm','converged','PicardSteps',...
                      'meanSectionSpeed','maxSectionSpeed',...
                      'officialFSMean','officialFSMax'});
+surfaceProfile = cell(numel(lengthList),1);
 
 for iLength = 1:numel(lengthList)
     L = lengthList(iLength);
@@ -76,6 +77,9 @@ for iLength = 1:numel(lengthList)
         section(topIndex(distance == min(distance))) = true;
     end
     speed = hypot(soln.ux(section),soln.uy(section));
+    xSection = mod(uNode(section,1),L);
+    [xSection,order] = sort(xSection);
+    speedProfile = speed(order);
 
     result.lengthKm(iLength) = L/1000;
     result.converged(iLength) = info.converged;
@@ -90,6 +94,7 @@ for iLength = 1:numel(lengthList)
         result.officialFSMean(iLength) = NaN;
         result.officialFSMax(iLength) = NaN;
     end
+    surfaceProfile{iLength} = [xSection/L,speedProfile];
 
     fprintf(['ISMIP-HOM C L=%6.1f km: converged=%d, Picard=%3d, ',...
         'mean speed=%9.4e, max speed=%9.4e m/yr\n'],...
@@ -98,3 +103,27 @@ for iLength = 1:numel(lengthList)
 end
 
 disp(result);
+
+figure(1);
+set(gcf,'Visible','on');
+clf;
+for iLength = 1:numel(lengthList)
+    subplot(2,3,iLength);
+    profile = surfaceProfile{iLength};
+    plot(profile(:,1),profile(:,2),'r-','LineWidth',1.6,...
+        'DisplayName','this solver');
+    hold on;
+    yline(officialFSMax(iLength),'k--','LineWidth',1.1,...
+        'DisplayName','official FS max');
+    yline(officialFSMean(iLength),'b:','LineWidth',1.1,...
+        'DisplayName','official FS mean');
+    hold off;
+    grid on;
+    xlabel('x/L');
+    ylabel('surface speed (m/yr)');
+    title(sprintf('L = %.0f km',lengthList(iLength)/1000));
+    if iLength == 1
+        legend('Location','best');
+    end
+end
+sgtitle('ISMIP-HOM experiment C: surface speed at y = L/4');

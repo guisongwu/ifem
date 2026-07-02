@@ -27,9 +27,11 @@ function [soln,eqn,info] = NonlinearStokes3P2P1(node,elem,bdFlag,pde,option)
 % Required data are pde.A, pde.n, pde.beta, and pde.m.  Optional data are
 % pde.f, pde.rho, pde.gravity, and pde.g_N.  Set option.assemble_tangent
 % true when the consistent nonlinear Jacobian is needed by an adjoint solve.
-% Pressure is determined up to a constant; this solver leaves that null
-% space unconstrained.  Do not add pressure constraints as Lagrange
-% multipliers, since they enter the discrete divergence equation.
+% Pressure is determined up to a constant.  Use
+% option.pressure_constraint = 'pin' to fix one pressure degree of freedom
+% during the linear solve; the returned pressure is shifted to zero mean.
+% Do not add pressure constraints as Lagrange multipliers, since they enter
+% the discrete divergence equation.
 
 if nargin < 5, option = struct; end
 option = setoption(option,'tol',1e-8);
@@ -86,16 +88,16 @@ bedDof = boundarydofs(isBedFace);
 bedNormalAtDof = beddofnormal(bedDof);
 
 pressureConstraint = lower(strtrim(char(option.pressure_constraint)));
-if ~ismember(pressureConstraint,{'none','mean-zero'})
+if ~ismember(pressureConstraint,{'none','pin','mean-zero'})
     error('iFEM:NS3PressureConstraint',...
-        'pressure_constraint must be mean-zero or none.');
+        'pressure_constraint must be pin, mean-zero, or none.');
 end
 if strcmp(pressureConstraint,'mean-zero')
     error('iFEM:NS3PressureConstraint',...
         ['mean-zero pressure constraints are not supported in ',...
          'NonlinearStokes3P2P1 because multiplier pressure ',...
          'constraints pollute the divergence equation. Use ',...
-         'pressure_constraint=''none''.']);
+         'pressure_constraint=''pin'' to remove the pressure null space.']);
 end
 addPressureMeanConstraint = false;
 
@@ -129,7 +131,11 @@ for k = 1:option.maxIt
     M = [K+Kb,B';B,sparse(Np,Np)];
     rhs = [F;zeros(Np,1)];
     saddle = [M,C';C,sparse(nConstraint,nConstraint)];
-    fullsol = saddle\[rhs;zeros(nConstraint,1)];
+    rhsFull = [rhs;zeros(nConstraint,1)];
+    if strcmp(pressureConstraint,'pin')
+        [saddle,rhsFull] = pinpressure(saddle,rhsFull);
+    end
+    fullsol = saddle\rhsFull;
 
     unew = fullsol(1:3*Nu);
     pnew = fullsol(3*Nu+(1:Np));
@@ -191,6 +197,9 @@ info.periodic = option.periodic;
 info.periodicSlope = option.periodic_slope;
 
 soln.u = u;
+if strcmp(pressureConstraint,'pin')
+    p = p-mean(p);
+end
 soln.p = p;
 soln.ux = u(1:Nu);
 soln.uy = u(Nu+(1:Nu));
@@ -211,8 +220,21 @@ if option.assemble_tangent
     Kbt = assemblebed(u,true);
     tangentM = [Kt+Kbt,B';B,sparse(Np,Np)];
     eqn.tangent = [tangentM,C';C,sparse(nConstraint,nConstraint)];
+    if strcmp(pressureConstraint,'pin')
+        eqn.tangent = pinpressure(eqn.tangent,[]);
+    end
     eqn.applyBetaDerivative = @assemblebetadirection;
 end
+
+    function [A,b] = pinpressure(A,b)
+        pressureDof = 3*Nu+1;
+        A(pressureDof,:) = 0;
+        A(:,pressureDof) = 0;
+        A(pressureDof,pressureDof) = 1;
+        if ~isempty(b)
+            b(pressureDof) = 0;
+        end
+    end
 
     function [K,etaMin,etaMax] = assembleviscous(uk)
         [lambda,w] = quadpts3(option.quadorder);

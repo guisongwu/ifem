@@ -1,5 +1,5 @@
-function pde = NS3MMSData(L,W,H,slope,eps_reg)
-%% NS3MMSDATA Manufactured solution for 3-D nonlinear Stokes.
+function pde = NSMMSData(L,W,H,slope,eps_reg)
+%% NSMMSDATA Manufactured solution for 3-D nonlinear Stokes.
 %
 % The solution is periodic in x and y and divergence-free.  With
 % q = z+slope*x and psi = sin(2*pi*x/L)*sin(2*pi*y/W)*q^2*sin(pi*q/H),
