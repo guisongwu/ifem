@@ -21,7 +21,8 @@ function [soln,eqn,info] = NonlinearFOP2(node,elem,bdFlag,pde,option)
 % Important options:
 %   option.tol, option.maxIt, option.damping, option.eps_reg,
 %   option.quadorder, option.printlevel, option.bed_condition,
-%   option.periodic, option.periodicBox.
+%   option.periodic, option.periodicBox, option.periodicSlope,
+%   option.assemble_tangent.
 
 if nargin < 5, option = struct; end
 option = setoption(option,'tol',1e-8);
@@ -34,7 +35,9 @@ option = setoption(option,'printlevel',1);
 option = setoption(option,'bed_condition','sliding');
 option = setoption(option,'periodic',[]);
 option = setoption(option,'periodicBox',[]);
+option = setoption(option,'periodicSlope',[0,0]);
 option = setoption(option,'periodic_tol',1e-10);
+option = setoption(option,'assemble_tangent',false);
 option = setoption(option,'residual_tol',option.tol);
 option = setoption(option,'residual_check_threshold',...
     max(1e-2,sqrt(option.residual_tol)));
@@ -190,11 +193,18 @@ soln.U = state;
 eqn.A = A;
 eqn.edge = edge;
 eqn.elem2dof = elem2dof;
+eqn.dofNode = udofNode;
 eqn.freeDof = freeDof;
 eqn.fixedDof = fixedDof;
 eqn.periodicProjection = Pperiodic;
 eqn.freeMaster = freeMaster;
 eqn.fixedMaster = fixedMaster;
+if option.assemble_tangent
+    Kt = assembleviscoustangent(state);
+    Kbt = assemblebedtangent(state);
+    eqn.tangent = Pperiodic'*(Kt+Kbt)*Pperiodic;
+    eqn.applyBetaDerivative = @assemblebetadirection;
+end
 
     function [A,etaMin,etaMax] = assembleviscous(uk)
         [lambda,w] = quadpts3(option.quadorder);
@@ -244,6 +254,57 @@ eqn.fixedMaster = fixedMaster;
         A = sparse(rows,cols,vals,2*Ndof,2*Ndof);
     end
 
+    function At = assembleviscoustangent(uk)
+        [lambda,w] = quadpts3(option.quadorder);
+        nq = size(lambda,1);
+        rows = zeros(nq*400*NT,1);
+        cols = zeros(nq*400*NT,1);
+        vals = zeros(nq*400*NT,1);
+        cursor = 0;
+        uh = uk(1:Ndof);
+        vh = uk(Ndof+1:end);
+        localDof = [elem2dof,Ndof+elem2dof];
+
+        for q = 1:nq
+            Dphi = p2gradient3(lambda(q,:),Dlambda);
+            gradU = evalgrad(uh,elem2dof,Dphi);
+            gradV = evalgrad(vh,elem2dof,Dphi);
+            ux = gradU(:,1); uy = gradU(:,2); uz = gradU(:,3);
+            vx = gradV(:,1); vy = gradV(:,2); vz = gradV(:,3);
+            epsII = ux.^2+vy.^2+ux.*vy+0.25*(uy+vx).^2+...
+                0.25*uz.^2+0.25*vz.^2;
+            xq = evalpoint(lambda(q,:));
+            Aq = coefficient(pde.A,xq);
+            nqfield = coefficient(pde.n,xq);
+            strain = epsII+option.eps_reg^2;
+            exponent = (1-nqfield)./(2*nqfield);
+            eta = 0.5.*Aq.^(-1./nqfield).*strain.^exponent;
+
+            for a = 1:20
+                [aComp,aBasis] = splitlocal(a);
+                da = Dphi(:,:,aBasis);
+                stateTest = fostrainproduct(aComp,da,1,gradU)+...
+                    fostrainproduct(aComp,da,2,gradV);
+                for b = 1:20
+                    [bComp,bBasis] = splitlocal(b);
+                    db = Dphi(:,:,bBasis);
+                    strainProduct = fostrainproduct(aComp,da,bComp,db);
+                    stateDirection = epsdirection(bComp,db,ux,uy,uz,...
+                        vx,vy,vz);
+                    kab = w(q)*volume.*eta.*...
+                        (strainProduct+exponent./strain.*...
+                         stateTest.*stateDirection);
+                    idx = cursor+(1:NT);
+                    rows(idx) = localDof(:,a);
+                    cols(idx) = localDof(:,b);
+                    vals(idx) = kab;
+                    cursor = cursor+NT;
+                end
+            end
+        end
+        At = sparse(rows,cols,vals,2*Ndof,2*Ndof);
+    end
+
     function [Ab,coefAtFace] = assemblebed(uk)
         Ab = sparse(2*Ndof,2*Ndof);
         coefAtFace = [];
@@ -289,6 +350,94 @@ eqn.fixedMaster = fixedMaster;
             end
         end
         Ab = sparse(double(ii),double(jj),ss,2*Ndof,2*Ndof);
+    end
+
+    function Abt = assemblebedtangent(uk)
+        Abt = sparse(2*Ndof,2*Ndof);
+        if strcmp(bedCondition,'no-slip') || ~any(bdFlag(:)==3)
+            return;
+        end
+        [lambdaFace,wFace] = quadpts3face(option.facequadorder);
+        nQuadPerFace = size(lambdaFace,1)/4;
+        uh = uk(1:Ndof);
+        vh = uk(Ndof+1:end);
+        ii = [];
+        jj = [];
+        ss = [];
+        exponent = (pde.m-1)/2;
+        for f = 1:4
+            elemIdx = find(bdFlag(:,f)==3);
+            if isempty(elemIdx), continue; end
+            faceArea = localfacearea(elemIdx,f);
+            for q = (f-1)*nQuadPerFace+(1:nQuadPerFace)
+                phi = p2basis(lambdaFace(q,:));
+                faceDof = elem2dof(elemIdx,:);
+                xq = evalpoint(lambdaFace(q,:),elemIdx);
+                beta = coefficient(pde.beta,xq);
+                uq = uh(faceDof)*phi';
+                vq = vh(faceDof)*phi';
+                speed2 = uq.^2+vq.^2+option.eps_reg^2;
+                base = speed2.^exponent;
+                cross = (pde.m-1)*speed2.^(exponent-1);
+                block11 = beta.*(base+cross.*uq.^2);
+                block12 = beta.*cross.*uq.*vq;
+                block22 = beta.*(base+cross.*vq.^2);
+                for a = 1:10
+                    ia = faceDof(:,a);
+                    for b = 1:10
+                        ib = faceDof(:,b);
+                        mass = wFace(q)*faceArea*phi(a)*phi(b);
+                        ii = [ii;ia;ia;Ndof+ia;Ndof+ia]; %#ok<AGROW>
+                        jj = [jj;ib;Ndof+ib;ib;Ndof+ib]; %#ok<AGROW>
+                        ss = [ss;mass.*block11;mass.*block12;...
+                            mass.*block12;mass.*block22]; %#ok<AGROW>
+                    end
+                end
+            end
+        end
+        Abt = sparse(double(ii),double(jj),ss,2*Ndof,2*Ndof);
+    end
+
+    function load = assemblebetadirection(betaDirection)
+        fullLoad = zeros(2*Ndof,1);
+        if strcmp(bedCondition,'no-slip') || ~any(bdFlag(:)==3)
+            load = Pperiodic'*fullLoad;
+            return;
+        end
+        [lambdaFace,wFace] = quadpts3face(option.facequadorder);
+        nQuadPerFace = size(lambdaFace,1)/4;
+        uh = state(1:Ndof);
+        vh = state(Ndof+1:end);
+        exponent = (pde.m-1)/2;
+        for f = 1:4
+            elemIdx = find(bdFlag(:,f)==3);
+            if isempty(elemIdx), continue; end
+            faceArea = localfacearea(elemIdx,f);
+            faceDof = elem2dof(elemIdx,:);
+            for q = (f-1)*nQuadPerFace+(1:nQuadPerFace)
+                phi = p2basis(lambdaFace(q,:));
+                xq = evalpoint(lambdaFace(q,:),elemIdx);
+                deltaBeta = coefficient(betaDirection,xq);
+                uq = uh(faceDof)*phi';
+                vq = vh(faceDof)*phi';
+                speed = (uq.^2+vq.^2+option.eps_reg^2).^exponent;
+                directionU = deltaBeta.*speed.*uq;
+                directionV = deltaBeta.*speed.*vq;
+                for a = 1:10
+                    contributionU = wFace(q)*faceArea.*...
+                        directionU*phi(a);
+                    contributionV = wFace(q)*faceArea.*...
+                        directionV*phi(a);
+                    fullLoad = fullLoad+accumarray(...
+                        double(faceDof(:,a)),contributionU,...
+                        [2*Ndof,1]);
+                    fullLoad = fullLoad+accumarray(...
+                        double(Ndof+faceDof(:,a)),contributionV,...
+                        [2*Ndof,1]);
+                end
+            end
+        end
+        load = Pperiodic'*fullLoad;
     end
 
     function F = assembleforce
@@ -476,6 +625,16 @@ else
 end
 end
 
+function value = epsdirection(component,db,ux,uy,uz,vx,vy,vz)
+if component == 1
+    value = (2*ux+vy).*db(:,1)+0.5*(uy+vx).*db(:,2)+...
+        0.5*uz.*db(:,3);
+else
+    value = 0.5*(uy+vx).*db(:,1)+(ux+2*vy).*db(:,2)+...
+        0.5*vz.*db(:,3);
+end
+end
+
 function [component,basis] = splitlocal(a)
 component = 1+(a>10);
 basis = a-10*(component-1);
@@ -555,10 +714,18 @@ if size(box,1) ~= 3 || size(box,2) ~= 2
 end
 tol = option.periodic_tol;
 key = dofNode;
+periodicSlope = option.periodicSlope;
+if isscalar(periodicSlope)
+    periodicSlope = [periodicSlope,0];
+end
 for d = periodic(:)'
     lower = box(d,1);
     upper = box(d,2);
     isUpper = abs(key(:,d)-upper) <= tol*max(1,abs(upper-lower));
+    if d <= 2
+        key(isUpper,3) = key(isUpper,3)+...
+            periodicSlope(d)*(upper-lower);
+    end
     key(isUpper,d) = lower;
 end
 key = round(key/tol);

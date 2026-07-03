@@ -1,8 +1,8 @@
-%% NONLINEARSTOKES3ADJINVSLABBED 3-D adjoint beta inversion on a slab bed.
+%% FO3ADJINVSINBED 3-D first-order adjoint beta inversion on a sinusoidal bed.
 %
-% This is a dimensionless 3-D counterpart of the 2-D slab-bed inverse
-% example.  It recovers q = log(beta) from synthetic top-surface horizontal
-% velocity observations (u,v) on a periodic sloping slab.
+% Synthetic top-surface horizontal velocity observations (u,v) are generated
+% with the 3-D FO solver and used to recover q = log(beta) on the basal
+% boundary.
 
 close all;
 clear variables;
@@ -13,45 +13,44 @@ L = 5;
 W = 5;
 H = 1;
 slope = 0.1;
-% Nx = 6;
-% Ny = 6;
-% Nz = 2;
+bedAmplitude = 0.1*H;
 Nx = 10;
 Ny = 10;
 Nz = 2;
 
-fprintf('3-D slab-bed beta inversion: L = %.04e, W = %.04e, H = %.04e\n',...
-    L,W,H);
+fprintf(['3-D FO sinusoidal-bed beta inversion: L = %.04e, ',...
+    'W = %.04e, H = %.04e\n'],L,W,H);
 
 [refnode,elem] = cubemesh([0,1,0,1,0,1],[1/Nx,1/Ny,1/Nz]);
 bdFlag = setboundary3(refnode,elem,'Neumann','z==1','Robin','z==0');
-node = maptoslab(refnode,L,W,H,slope);
+node = maptosinbed(refnode,L,W,H,slope,bedAmplitude);
 
 [~,edge] = dof3P2(elem);
 N = size(node,1);
-Nu = N+size(edge,1);
-uNode = [node;(node(edge(:,1),:)+node(edge(:,2),:))/2];
+Ndof = N+size(edge,1);
+dofNode = [node;(node(edge(:,1),:)+node(edge(:,2),:))/2];
 tolGeometry = 1000*eps(max(1,max(abs(node(:)))));
-topScalarDof = find(abs(uNode(:,3)+slope*uNode(:,1)-H) < tolGeometry & ...
-    uNode(:,1) < L-tolGeometry & uNode(:,2) < W-tolGeometry);
-topDof = [topScalarDof;Nu+topScalarDof];
+topScalarDof = find(abs(dofNode(:,3)+slope*dofNode(:,1)-H) < ...
+    tolGeometry & dofNode(:,1) < L-tolGeometry & ...
+    dofNode(:,2) < W-tolGeometry);
+topDof = [topScalarDof;Ndof+topScalarDof];
 topWeightScalar = (L*W/numel(topScalarDof))*ones(numel(topScalarDof),1);
 topWeight = [topWeightScalar;topWeightScalar];
 
-%% Nonlinear Stokes model
+%% FO model
 pde = struct;
 pde.A = 1;
 pde.n = 3;
 pde.m = 1;
 pde.rho = 1;
-pde.gravity = [0,0,-1];
+pde.gravity = 1;
+pde.gradS = @(pt) repmat([-slope,0],size(pt,1),1);
 pde.g_N = [];
 
-option.periodic = true;
-option.periodic_x = [0,L];
-option.periodic_y = [0,W];
-option.periodic_slope = [slope,0];
-option.pressure_constraint = 'none';
+option.periodic = [1 2];
+option.periodicBox = [0,L;0,W;min(node(:,3)),max(node(:,3))];
+option.periodicSlope = [slope,0];
+option.bed_condition = 'sliding';
 option.eps_reg = 1e-3;
 option.maxIt = 200;
 option.tol = 1e-6;
@@ -76,6 +75,7 @@ betaInitial = betaTrue.*(1+0.15*sin(2*pi*xi).*cos(2*pi*eta)+0.05);
 qTrue = log(betaTrue(:));
 q = log(betaInitial(:));
 Nm = numel(q);
+D = periodicgradient2d(NxBeta,NyBeta);
 
 fprintf('  beta parameters: %d, top velocity observations: %d\n',...
     Nm,numel(topDof));
@@ -89,11 +89,13 @@ dataNormSquared = max(topWeight'*(dataObs.^2),eps);
 
 %% Inversion loop
 maxInverseIt = 20;
+alpha = 1e-11;
 lambda = 1e-6;
 pcgTolerance = 1e-7;
 pcgMaxIt = 50;
 gradientTolerance = 1e-9;
 stepTolerance = 1e-8;
+objectiveTolerance = 1e-15;
 useLineSearch = defaultlinesearch();
 uWarm = [];
 optimizationForwardSolves = 0;
@@ -107,7 +109,7 @@ history.gradientNorm = NaN(maxInverseIt,1);
 history.picardSteps = NaN(maxInverseIt,1);
 history.iterationTime = NaN(maxInverseIt,1);
 
-fprintf(['\n it    objective      betaLinf      |grad|    ',...
+fprintf(['\n it    objective      betaLinfRel   |grad|    ',...
     'fPicard pcgIt   pcgRel   ls    time(s)  stop\n']);
 fprintf([' --  ------------  ------------  ------------  ------- ----- ',...
     '---------- --  --------  ----\n']);
@@ -121,13 +123,17 @@ for k = 1:maxInverseIt
     uWarm = u;
 
     residual = u(topDof)-dataObs;
-    objective = 0.5*(topWeight'*(residual.^2))/dataNormSquared;
+    dataObjective = 0.5*(topWeight'*(residual.^2))/dataNormSquared;
+    regularization = D*q;
+    objective = dataObjective+0.5*alpha*(regularization'*regularization);
     G = assembleparameterderivative(eqn,q,xBeta,yBeta,L,W);
 
-    observationGradient = zeros(size(eqn.tangent,1),1);
+    observationGradient = zeros(size(u));
     observationGradient(topDof) = topWeight.*residual/dataNormSquared;
-    adjoint = eqn.tangent'\(-observationGradient);
-    gradient = G'*adjoint;
+    observationGradientMaster = eqn.periodicProjection'*...
+        observationGradient;
+    adjoint = eqn.tangent'\(-observationGradientMaster);
+    gradient = G'*adjoint+alpha*(D'*(D*q));
 
     betaCurrent = exp(q);
     betaTrueVector = exp(qTrue);
@@ -142,37 +148,38 @@ for k = 1:maxInverseIt
     history.gradientNorm(k) = norm(gradient);
     history.picardSteps(k) = forwardInfo.itStep;
 
-    if objective < 1e-15
+    if objective < objectiveTolerance
         history.iterationTime(k) = toc(iterationStart);
-        printiteration(k,objective,history.parameterErrorLinf(k),...
-            norm(gradient),forwardInfo.itStep,NaN,NaN,0,...
-            history.iterationTime(k),'obj');
+        printiteration(k,objective,...
+            history.parameterErrorRelativeLinf(k),norm(gradient),...
+            forwardInfo.itStep,NaN,NaN,0,history.iterationTime(k),'obj');
         history = trimhistory(history,k);
         break
     end
 
     if norm(gradient) <= gradientTolerance
         history.iterationTime(k) = toc(iterationStart);
-        printiteration(k,objective,history.parameterErrorLinf(k),...
-            norm(gradient),forwardInfo.itStep,NaN,NaN,0,...
-            history.iterationTime(k),'grad');
+        printiteration(k,objective,...
+            history.parameterErrorRelativeLinf(k),norm(gradient),...
+            forwardInfo.itStep,NaN,NaN,0,history.iterationTime(k),'grad');
         history = trimhistory(history,k);
         break
     end
 
-    hessian = @(direction) gaussnewtonproduct(direction,eqn,G,...
-        topDof,topWeight,dataNormSquared,lambda);
+    hessian = @(direction) gaussnewtonproduct(direction,eqn,G,topDof,...
+        topWeight,dataNormSquared,D,alpha,lambda);
     [step,flag,pcgRel,pcgIt] = pcg(...
         hessian,-gradient,pcgTolerance,pcgMaxIt);
     if flag ~= 0
-        warning('iFEM:NonlinearStokes3AdjInvPCG',...
+        warning('iFEM:FO3AdjointPCG',...
             'PCG did not reach the requested tolerance.');
     end
 
     if norm(step) <= stepTolerance*max(1,norm(q))
         history.iterationTime(k) = toc(iterationStart);
-        printiteration(k,objective,history.parameterErrorLinf(k),...
-            norm(gradient),forwardInfo.itStep,pcgIt,pcgRel,0,...
+        printiteration(k,objective,...
+            history.parameterErrorRelativeLinf(k),norm(gradient),...
+            forwardInfo.itStep,pcgIt,pcgRel,0,...
             history.iterationTime(k),'step');
         history = trimhistory(history,k);
         break
@@ -190,8 +197,11 @@ for k = 1:maxInverseIt
             optimizationForwardSolves = optimizationForwardSolves+1;
             if trialInfo.converged
                 trialResidual = uTrial(topDof)-dataObs;
-                trialObjective = 0.5*(topWeight'*(trialResidual.^2))/...
-                    dataNormSquared;
+                trialRegularization = D*qTrial;
+                trialObjective = 0.5*(topWeight'*...
+                    (trialResidual.^2))/dataNormSquared+...
+                    0.5*alpha*(trialRegularization'*...
+                    trialRegularization);
                 if trialObjective < objective
                     q = qTrial;
                     uWarm = uTrial;
@@ -204,7 +214,7 @@ for k = 1:maxInverseIt
         end
         if ~accepted
             lambda = 10*lambda;
-            warning('iFEM:NonlinearStokes3AdjInvNoStep',...
+            warning('iFEM:FO3AdjointNoStep',...
                 'No decreasing step was found; increasing LM damping.');
         end
     else
@@ -218,13 +228,13 @@ for k = 1:maxInverseIt
             lambda = max(lambda/3,1e-12);
         else
             lambda = 10*lambda;
-            warning('iFEM:NonlinearStokes3AdjInvNoStep',...
+            warning('iFEM:FO3AdjointNoStep',...
                 'Undamped Gauss-Newton trial did not converge.');
         end
     end
 
     history.iterationTime(k) = toc(iterationStart);
-    printiteration(k,objective,history.parameterErrorLinf(k),...
+    printiteration(k,objective,history.parameterErrorRelativeLinf(k),...
         norm(gradient),forwardInfo.itStep,pcgIt,pcgRel,lineSearchCount,...
         history.iterationTime(k),'-');
 
@@ -257,7 +267,33 @@ nexttile;
 surf(XB,YB,betaRecovered);
 title('recovered beta');
 xlabel('x'); ylabel('y'); zlabel('\beta');
-sgtitle('3-D slab-bed beta inversion');
+sgtitle('3-D FO sinusoidal-bed beta inversion');
+
+figure(2);
+set(gcf,'Visible','on');
+clf;
+iteration = 1:numel(history.objective);
+tiledlayout(1,2,'TileSpacing','compact','Padding','compact');
+nexttile;
+semilogy(iteration,history.objective,'o-','LineWidth',1.4,...
+    'DisplayName','objective');
+grid on;
+xlabel('inverse iteration');
+ylabel('objective');
+legend('Location','best');
+title('objective history');
+nexttile;
+semilogy(iteration,history.parameterErrorLinf,'s-','LineWidth',1.4,...
+    'DisplayName','absolute beta Linf');
+hold on;
+semilogy(iteration,history.parameterErrorRelativeLinf,'^-',...
+    'LineWidth',1.4,'DisplayName','relative beta Linf');
+hold off;
+grid on;
+xlabel('inverse iteration');
+ylabel('\beta error');
+legend('Location','best');
+title('\beta error history');
 
 figure(3);
 set(gcf,'Visible','on');
@@ -295,63 +331,42 @@ subplot(2,3,6);
 axis off;
 sgtitle('\beta slices');
 
-figure(2);
-set(gcf,'Visible','on');
-clf;
-iteration = 1:numel(history.objective);
-tiledlayout(1,2,'TileSpacing','compact','Padding','compact');
-nexttile;
-semilogy(iteration,history.objective,'o-','LineWidth',1.4,...
-    'DisplayName','objective');
-grid on;
-xlabel('inverse iteration');
-ylabel('objective');
-legend('Location','best');
-title('objective history');
-nexttile;
-semilogy(iteration,history.parameterErrorLinf,'s-','LineWidth',1.4,...
-    'DisplayName','absolute beta Linf');
-hold on;
-semilogy(iteration,history.parameterErrorRelativeLinf,'^-',...
-    'LineWidth',1.4,'DisplayName','relative beta Linf');
-hold off;
-grid on;
-xlabel('inverse iteration');
-ylabel('\beta error');
-legend('Location','best');
-title('\beta error history');
-
-[uRecovered,~,~,pRecovered] = solveforward(q,uWarm,pde,option,...
+[uRecovered,~,~,solnRecovered] = solveforward(q,uWarm,pde,option,...
     node,elem,bdFlag,xBeta,yBeta,L,W);
 figure(4);
 set(gcf,'Visible','on');
 clf;
-plotsurfacefields(node,uRecovered,pRecovered,Nu,H,slope,L,W);
-sgtitle('recovered top-surface fields');
+plotsurfacefields(node,solnRecovered,Ndof,H,slope,L,W);
+sgtitle('recovered top-surface FO fields');
 
-function node = maptoslab(refnode,L,W,H,slope)
+function node = maptosinbed(refnode,L,W,H,slope,bedAmplitude)
     node = refnode;
-    node(:,1) = L*refnode(:,1);
-    node(:,2) = W*refnode(:,2);
-    node(:,3) = H*refnode(:,3)-slope*node(:,1);
+    x = L*refnode(:,1);
+    y = W*refnode(:,2);
+    zeta = refnode(:,3);
+    surface = H-slope*x;
+    bed = -slope*x+bedAmplitude*sin(2*pi*x/L);
+    node(:,1) = x;
+    node(:,2) = y;
+    node(:,3) = bed+zeta.*(surface-bed);
 end
 
-function plotsurfacefields(node,u,p,Nu,H,slope,L,W)
-    topPressure = abs(node(:,3)+slope*node(:,1)-H) < ...
+function plotsurfacefields(node,soln,Ndof,H,slope,L,W)
+    top = abs(node(:,3)+slope*node(:,1)-H) < ...
         1000*eps(max(1,max(abs(node(:)))));
-    topPressureNode = node(topPressure,:);
-    topPressureIndex = find(topPressure);
-    topU = u(topPressureIndex);
-    topV = u(Nu+topPressureIndex);
-    topP = p(topPressure);
-    topElem = delaunay(topPressureNode(:,1),topPressureNode(:,2));
+    topNode = node(top,:);
+    topIndex = find(top);
+    topU = soln.U(topIndex);
+    topV = soln.U(Ndof+topIndex);
+    topSpeed = sqrt(topU.^2+topV.^2);
+    topElem = delaunay(topNode(:,1),topNode(:,2));
     tiledlayout(1,3,'TileSpacing','compact','Padding','compact');
     nexttile;
-    plottopfield(topPressureNode,topElem,topU,L,W,'surface u');
+    plottopfield(topNode,topElem,topU,L,W,'surface u');
     nexttile;
-    plottopfield(topPressureNode,topElem,topV,L,W,'surface v');
+    plottopfield(topNode,topElem,topV,L,W,'surface v');
     nexttile;
-    plottopfield(topPressureNode,topElem,topP,L,W,'surface p');
+    plottopfield(topNode,topElem,topSpeed,L,W,'surface speed');
 end
 
 function plottopfield(topNode,topElem,value,L,W,titleText)
@@ -368,13 +383,17 @@ function plottopfield(topNode,topElem,value,L,W,titleText)
 end
 
 function product = gaussnewtonproduct(direction,eqn,G,topDof,...
-        topWeight,dataNormSquared,lambda)
-    incrementalState = eqn.tangent\(-G*direction);
-    incrementalObservation = zeros(size(eqn.tangent,1),1);
+        topWeight,dataNormSquared,D,alpha,lambda)
+    incrementalMaster = eqn.tangent\(-G*direction);
+    incrementalState = eqn.periodicProjection*incrementalMaster;
+    incrementalObservation = zeros(size(incrementalState));
     incrementalObservation(topDof) = ...
         topWeight.*incrementalState(topDof)/dataNormSquared;
-    incrementalAdjoint = eqn.tangent'\(-incrementalObservation);
-    product = G'*incrementalAdjoint+lambda*direction;
+    incrementalObservationMaster = eqn.periodicProjection'*...
+        incrementalObservation;
+    incrementalAdjoint = eqn.tangent'\(-incrementalObservationMaster);
+    product = G'*incrementalAdjoint+alpha*(D'*(D*direction))+...
+        lambda*direction;
 end
 
 function G = assembleparameterderivative(eqn,q,xBeta,yBeta,L,W)
@@ -392,7 +411,7 @@ function G = assembleparameterderivative(eqn,q,xBeta,yBeta,L,W)
     end
 end
 
-function [u,eqn,info,p] = solveforward(q,u0,pde,option,...
+function [u,eqn,info,soln] = solveforward(q,u0,pde,option,...
         node,elem,bdFlag,xBeta,yBeta,L,W)
     beta = reshape(exp(q(:)),numel(xBeta),numel(yBeta));
     pde.beta = @(pt) periodicRectP1(pt(:,1),pt(:,2),xBeta,yBeta,...
@@ -404,9 +423,8 @@ function [u,eqn,info,p] = solveforward(q,u0,pde,option,...
     else
         option.u0 = u0;
     end
-    [soln,eqn,info] = NonlinearStokes3P2P1(node,elem,bdFlag,pde,option);
-    u = soln.u;
-    p = soln.p;
+    [soln,eqn,info] = NonlinearFOP2(node,elem,bdFlag,pde,option);
+    u = soln.U;
 end
 
 function value = periodicRectP1(x,y,xNode,yNode,nodalValue,L,W)
@@ -430,7 +448,31 @@ function value = periodicRectP1(x,y,xNode,yNode,nodalValue,L,W)
         (1-tx).*ty.*v01+tx.*ty.*v11;
 end
 
-function printiteration(k,objective,betaLinf,gradientNorm,...
+function D = periodicgradient2d(nx,ny)
+    nm = nx*ny;
+    rows = [];
+    cols = [];
+    vals = [];
+    cursor = 0;
+    for iy = 1:ny
+        for ix = 1:nx
+            id = sub2ind([nx,ny],ix,iy);
+            ixp = mod(ix,nx)+1;
+            iyp = mod(iy,ny)+1;
+            cursor = cursor+1;
+            rows = [rows;cursor;cursor]; %#ok<AGROW>
+            cols = [cols;id;sub2ind([nx,ny],ixp,iy)]; %#ok<AGROW>
+            vals = [vals;-1;1]; %#ok<AGROW>
+            cursor = cursor+1;
+            rows = [rows;cursor;cursor]; %#ok<AGROW>
+            cols = [cols;id;sub2ind([nx,ny],ix,iyp)]; %#ok<AGROW>
+            vals = [vals;-1;1]; %#ok<AGROW>
+        end
+    end
+    D = sparse(rows,cols,vals,2*nm,nm);
+end
+
+function printiteration(k,objective,betaRel,gradientNorm,...
         forwardPicard,pcgIt,pcgRel,lineSearchCount,iterationTime,stopReason)
     if isnan(pcgIt)
         pcgText = sprintf('%3s','-');
@@ -447,7 +489,7 @@ function printiteration(k,objective,betaLinf,gradientNorm,...
     end
     fprintf(['%3d  %.04e    %.04e    %.04e    %5d   %s  %s  ',...
         '%2d  %8.2f  %s\n'],...
-        k,objective,betaLinf,gradientNorm,...
+        k,objective,betaRel,gradientNorm,...
         forwardPicard,pcgText,pcgRelText,lineSearchCount,...
         iterationTime,stopReason);
 end

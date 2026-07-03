@@ -1,8 +1,9 @@
-%% NONLINEARSTOKES3ADJINVSLABBED 3-D adjoint beta inversion on a slab bed.
+%% NONLINEARSTOKES3ADJINVSINBED 3-D adjoint beta inversion on a sinusoidal bed.
 %
-% This is a dimensionless 3-D counterpart of the 2-D slab-bed inverse
+% This is a dimensionless 3-D counterpart of the 2-D sinusoidal-bed inverse
 % example.  It recovers q = log(beta) from synthetic top-surface horizontal
-% velocity observations (u,v) on a periodic sloping slab.
+% velocity observations (u,v) on a periodic sloping domain whose bed varies
+% sinusoidally in the x direction.
 
 close all;
 clear variables;
@@ -13,27 +14,26 @@ L = 5;
 W = 5;
 H = 1;
 slope = 0.1;
-% Nx = 6;
-% Ny = 6;
-% Nz = 2;
+bedAmplitude = 0.1*H;
 Nx = 10;
 Ny = 10;
 Nz = 2;
 
-fprintf('3-D slab-bed beta inversion: L = %.04e, W = %.04e, H = %.04e\n',...
-    L,W,H);
+fprintf(['3-D sinusoidal-bed beta inversion: L = %.04e, W = %.04e, ',...
+    'H = %.04e\n'],L,W,H);
 
 [refnode,elem] = cubemesh([0,1,0,1,0,1],[1/Nx,1/Ny,1/Nz]);
 bdFlag = setboundary3(refnode,elem,'Neumann','z==1','Robin','z==0');
-node = maptoslab(refnode,L,W,H,slope);
+node = maptosinbed(refnode,L,W,H,slope,bedAmplitude);
 
 [~,edge] = dof3P2(elem);
 N = size(node,1);
 Nu = N+size(edge,1);
 uNode = [node;(node(edge(:,1),:)+node(edge(:,2),:))/2];
 tolGeometry = 1000*eps(max(1,max(abs(node(:)))));
-topScalarDof = find(abs(uNode(:,3)+slope*uNode(:,1)-H) < tolGeometry & ...
-    uNode(:,1) < L-tolGeometry & uNode(:,2) < W-tolGeometry);
+topScalarDof = find(abs(uNode(:,3)+slope*uNode(:,1)-H) < ...
+    tolGeometry & uNode(:,1) < L-tolGeometry & ...
+    uNode(:,2) < W-tolGeometry);
 topDof = [topScalarDof;Nu+topScalarDof];
 topWeightScalar = (L*W/numel(topScalarDof))*ones(numel(topScalarDof),1);
 topWeight = [topWeightScalar;topWeightScalar];
@@ -257,7 +257,7 @@ nexttile;
 surf(XB,YB,betaRecovered);
 title('recovered beta');
 xlabel('x'); ylabel('y'); zlabel('\beta');
-sgtitle('3-D slab-bed beta inversion');
+sgtitle('3-D sinusoidal-bed beta inversion');
 
 figure(3);
 set(gcf,'Visible','on');
@@ -329,11 +329,16 @@ clf;
 plotsurfacefields(node,uRecovered,pRecovered,Nu,H,slope,L,W);
 sgtitle('recovered top-surface fields');
 
-function node = maptoslab(refnode,L,W,H,slope)
+function node = maptosinbed(refnode,L,W,H,slope,bedAmplitude)
     node = refnode;
-    node(:,1) = L*refnode(:,1);
-    node(:,2) = W*refnode(:,2);
-    node(:,3) = H*refnode(:,3)-slope*node(:,1);
+    x = L*refnode(:,1);
+    y = W*refnode(:,2);
+    zeta = refnode(:,3);
+    surface = H-slope*x;
+    bed = -slope*x+bedAmplitude*sin(2*pi*x/L);
+    node(:,1) = x;
+    node(:,2) = y;
+    node(:,3) = bed+zeta.*(surface-bed);
 end
 
 function plotsurfacefields(node,u,p,Nu,H,slope,L,W)

@@ -143,8 +143,8 @@ fprintf(['  beta true: %s, initial perturbation: %s, ',...
 
 %% Inverse options
 maxInverseIt = getconfig(foInvConfig,'maxInverseIt',50);
-% alpha = getconfig(foInvConfig,'alpha',0); %
-alpha = getconfig(foInvConfig,'alpha',1e-11); % iteration 14
+alpha = getconfig(foInvConfig,'alpha',0); %
+% alpha = getconfig(foInvConfig,'alpha',1e-11); % iteration 14
 % alpha = getconfig(foInvConfig,'alpha',1e-12); % iteration 23
 lambda = getconfig(foInvConfig,'lambda',1e-8);
 pcgTolerance = 1e-8;
