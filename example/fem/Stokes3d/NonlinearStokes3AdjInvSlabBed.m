@@ -96,22 +96,26 @@ gradientTolerance = 1e-9;
 stepTolerance = 1e-8;
 useLineSearch = defaultlinesearch();
 uWarm = [];
+optimizationForwardSolves = 0;
 
 history.objective = NaN(maxInverseIt,1);
 history.dataResidual = NaN(maxInverseIt,1);
 history.parameterError = NaN(maxInverseIt,1);
 history.parameterErrorLinf = NaN(maxInverseIt,1);
+history.parameterErrorRelativeLinf = NaN(maxInverseIt,1);
 history.gradientNorm = NaN(maxInverseIt,1);
 history.picardSteps = NaN(maxInverseIt,1);
 history.iterationTime = NaN(maxInverseIt,1);
 
 fprintf(['\n it    objective      betaLinf      |grad|    ',...
-    'fPicard pcgIt ls    time(s)  stop\n']);
-fprintf(' --  ------------  ------------  ------------  ------- ----- --  --------  ----\n');
+    'fPicard pcgIt   pcgRel   ls    time(s)  stop\n']);
+fprintf([' --  ------------  ------------  ------------  ------- ----- ',...
+    '---------- --  --------  ----\n']);
 for k = 1:maxInverseIt
     iterationStart = tic;
     [u,eqn,forwardInfo] = solveforward(q,uWarm,pde,option,...
         node,elem,bdFlag,xBeta,yBeta,L,W);
+    optimizationForwardSolves = optimizationForwardSolves+1;
     assert(forwardInfo.converged,...
         'Forward solve failed at inverse iteration %d.',k);
     uWarm = u;
@@ -133,13 +137,15 @@ for k = 1:maxInverseIt
     history.parameterError(k) = norm(betaCurrent-betaTrueVector)/...
         norm(betaTrueVector);
     history.parameterErrorLinf(k) = norm(betaCurrent-betaTrueVector,inf);
+    history.parameterErrorRelativeLinf(k) = ...
+        history.parameterErrorLinf(k)/norm(betaTrueVector,inf);
     history.gradientNorm(k) = norm(gradient);
     history.picardSteps(k) = forwardInfo.itStep;
 
     if objective < 1e-15
         history.iterationTime(k) = toc(iterationStart);
         printiteration(k,objective,history.parameterErrorLinf(k),...
-            norm(gradient),forwardInfo.itStep,NaN,0,...
+            norm(gradient),forwardInfo.itStep,NaN,NaN,0,...
             history.iterationTime(k),'obj');
         history = trimhistory(history,k);
         break
@@ -148,7 +154,7 @@ for k = 1:maxInverseIt
     if norm(gradient) <= gradientTolerance
         history.iterationTime(k) = toc(iterationStart);
         printiteration(k,objective,history.parameterErrorLinf(k),...
-            norm(gradient),forwardInfo.itStep,NaN,0,...
+            norm(gradient),forwardInfo.itStep,NaN,NaN,0,...
             history.iterationTime(k),'grad');
         history = trimhistory(history,k);
         break
@@ -156,7 +162,8 @@ for k = 1:maxInverseIt
 
     hessian = @(direction) gaussnewtonproduct(direction,eqn,G,...
         topDof,topWeight,dataNormSquared,lambda);
-    [step,flag,~,pcgIt] = pcg(hessian,-gradient,pcgTolerance,pcgMaxIt);
+    [step,flag,pcgRel,pcgIt] = pcg(...
+        hessian,-gradient,pcgTolerance,pcgMaxIt);
     if flag ~= 0
         warning('iFEM:NonlinearStokes3AdjInvPCG',...
             'PCG did not reach the requested tolerance.');
@@ -165,7 +172,7 @@ for k = 1:maxInverseIt
     if norm(step) <= stepTolerance*max(1,norm(q))
         history.iterationTime(k) = toc(iterationStart);
         printiteration(k,objective,history.parameterErrorLinf(k),...
-            norm(gradient),forwardInfo.itStep,pcgIt,0,...
+            norm(gradient),forwardInfo.itStep,pcgIt,pcgRel,0,...
             history.iterationTime(k),'step');
         history = trimhistory(history,k);
         break
@@ -180,6 +187,7 @@ for k = 1:maxInverseIt
             qTrial = q+stepLength*step;
             [uTrial,~,trialInfo] = solveforward(qTrial,u,pde,option,...
                 node,elem,bdFlag,xBeta,yBeta,L,W);
+            optimizationForwardSolves = optimizationForwardSolves+1;
             if trialInfo.converged
                 trialResidual = uTrial(topDof)-dataObs;
                 trialObjective = 0.5*(topWeight'*(trialResidual.^2))/...
@@ -203,6 +211,7 @@ for k = 1:maxInverseIt
         qTrial = q+step;
         [uTrial,~,trialInfo] = solveforward(qTrial,u,pde,option,...
             node,elem,bdFlag,xBeta,yBeta,L,W);
+        optimizationForwardSolves = optimizationForwardSolves+1;
         if trialInfo.converged
             q = qTrial;
             uWarm = uTrial;
@@ -216,7 +225,7 @@ for k = 1:maxInverseIt
 
     history.iterationTime(k) = toc(iterationStart);
     printiteration(k,objective,history.parameterErrorLinf(k),...
-        norm(gradient),forwardInfo.itStep,pcgIt,lineSearchCount,...
+        norm(gradient),forwardInfo.itStep,pcgIt,pcgRel,lineSearchCount,...
         history.iterationTime(k),'-');
 
     if k == maxInverseIt
@@ -225,8 +234,12 @@ for k = 1:maxInverseIt
 end
 
 betaRecovered = reshape(exp(q),NxBeta,NyBeta);
-fprintf('\nFinal relative beta error: %.04e\n',...
-    norm(betaRecovered(:)-betaTrue(:))/norm(betaTrue(:)));
+betaErrorLinf = norm(betaRecovered(:)-betaTrue(:),inf);
+betaErrorRelativeLinf = betaErrorLinf/norm(betaTrue(:),inf);
+fprintf('\nSummary\n');
+fprintf('  optimization forward solves: %d\n',optimizationForwardSolves);
+fprintf('  final beta Linf error: %.04e, relative Linf: %.04e\n',...
+    betaErrorLinf,betaErrorRelativeLinf);
 
 figure(1);
 set(gcf,'Visible','on');
@@ -246,7 +259,7 @@ title('recovered beta');
 xlabel('x'); ylabel('y'); zlabel('\beta');
 sgtitle('3-D slab-bed beta inversion');
 
-figure(2);
+figure(3);
 set(gcf,'Visible','on');
 clf;
 betaPlotX = linspace(0,L,401)';
@@ -282,7 +295,7 @@ subplot(2,3,6);
 axis off;
 sgtitle('\beta slices');
 
-figure(3);
+figure(2);
 set(gcf,'Visible','on');
 clf;
 iteration = 1:numel(history.objective);
@@ -296,11 +309,11 @@ ylabel('objective');
 legend('Location','best');
 title('objective history');
 nexttile;
-semilogy(iteration,history.parameterError,'s-','LineWidth',1.4,...
-    'DisplayName','relative beta L2');
-hold on;
-semilogy(iteration,history.parameterErrorLinf,'^-','LineWidth',1.4,...
+semilogy(iteration,history.parameterErrorLinf,'s-','LineWidth',1.4,...
     'DisplayName','absolute beta Linf');
+hold on;
+semilogy(iteration,history.parameterErrorRelativeLinf,'^-',...
+    'LineWidth',1.4,'DisplayName','relative beta Linf');
 hold off;
 grid on;
 xlabel('inverse iteration');
@@ -418,18 +431,25 @@ function value = periodicRectP1(x,y,xNode,yNode,nodalValue,L,W)
 end
 
 function printiteration(k,objective,betaLinf,gradientNorm,...
-        forwardPicard,pcgIt,lineSearchCount,iterationTime,stopReason)
+        forwardPicard,pcgIt,pcgRel,lineSearchCount,iterationTime,stopReason)
     if isnan(pcgIt)
         pcgText = '  -';
     else
         pcgText = sprintf('%3d',pcgIt);
     end
+    if isnan(pcgRel)
+        pcgRelText = '    -';
+    else
+        pcgRelText = sprintf('%.04e',pcgRel);
+    end
     if isempty(stopReason)
         stopReason = '-';
     end
-    fprintf('%3d  %.04e    %.04e    %.04e    %5d   %s  %2d  %8.2f  %s\n',...
+    fprintf(['%3d  %.04e    %.04e    %.04e    %5d   %s  %s  ',...
+        '%2d  %8.2f  %s\n'],...
         k,objective,betaLinf,gradientNorm,...
-        forwardPicard,pcgText,lineSearchCount,iterationTime,stopReason);
+        forwardPicard,pcgText,pcgRelText,lineSearchCount,...
+        iterationTime,stopReason);
 end
 
 function history = trimhistory(history,k)

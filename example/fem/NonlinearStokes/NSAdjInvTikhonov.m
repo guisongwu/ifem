@@ -84,6 +84,8 @@ gradientTolerance = 1e-9;
 history.objective = NaN(maxInverseIt,1);
 history.dataResidual = NaN(maxInverseIt,1);
 history.parameterError = NaN(maxInverseIt,1);
+history.parameterErrorLinf = NaN(maxInverseIt,1);
+history.parameterErrorRelativeLinf = NaN(maxInverseIt,1);
 history.gradientNorm = NaN(maxInverseIt,1);
 derivativeCheck = struct('stateError',NaN,'gradientError',NaN,...
     'gaussNewtonError',NaN,'finiteDifference',NaN,...
@@ -110,7 +112,11 @@ for k = 1:maxInverseIt
 
     history.objective(k) = objective;
     history.dataResidual(k) = norm(residual);
-    history.parameterError(k) = norm(exp(q)-betaTrue)/norm(betaTrue);
+    betaCurrent = exp(q);
+    history.parameterError(k) = norm(betaCurrent-betaTrue)/norm(betaTrue);
+    history.parameterErrorLinf(k) = norm(betaCurrent-betaTrue,inf);
+    history.parameterErrorRelativeLinf(k) = ...
+        history.parameterErrorLinf(k)/norm(betaTrue,inf);
     history.gradientNorm(k) = norm(gradient);
 
     fprintf(['adjoint inverse %2d: objective %.6e, data %.6e, ',...
@@ -197,10 +203,29 @@ legend('Location','best');
 title('Nonlinear Stokes adjoint inversion');
 
 figure(2);
-semilogy(history.parameterError,'o-','LineWidth',1.4);
+iteration = 1:numel(history.objective);
+subplot(1,2,1);
+semilogy(iteration,history.objective,'o-',...
+    'LineWidth',1.4,'DisplayName','objective');
 grid on;
 xlabel('inverse iteration');
-ylabel('relative beta error');
+ylabel('objective');
+legend('Location','best');
+title('objective history');
+
+iteration = 1:numel(history.parameterError);
+subplot(1,2,2);
+semilogy(iteration,history.parameterErrorLinf,'s-',...
+    'LineWidth',1.4,'DisplayName','absolute Linf');
+hold on;
+semilogy(iteration,history.parameterErrorRelativeLinf,'^-',...
+    'LineWidth',1.4,'DisplayName','relative Linf');
+hold off;
+grid on;
+xlabel('inverse iteration');
+ylabel('\beta error');
+legend('Location','best');
+title('\beta error history');
 
 figure(3);
 [uRecovered,~,~] = solveforward(q,uWarm,pde,option,...

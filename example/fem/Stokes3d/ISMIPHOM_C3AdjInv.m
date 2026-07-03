@@ -97,10 +97,14 @@ uWarm = [];
 history.objective = NaN(maxInverseIt,1);
 history.dataResidual = NaN(maxInverseIt,1);
 history.parameterError = NaN(maxInverseIt,1);
+history.parameterErrorLinf = NaN(maxInverseIt,1);
+history.parameterErrorRelativeLinf = NaN(maxInverseIt,1);
 history.gradientNorm = NaN(maxInverseIt,1);
 
-fprintf('\n it    objective      dataRel      betaRel       |grad|    fPicard pcgIt ls\n');
-fprintf(' --  ------------  ------------  ------------  ------------  ------- ----- --\n');
+fprintf(['\n it    objective      dataRel      betaRel       |grad|    ',...
+    'fPicard pcgIt   pcgRel   ls\n']);
+fprintf([' --  ------------  ------------  ------------  ------------  ',...
+    '------- ----- ---------- --\n']);
 for k = 1:maxInverseIt
     [u,eqn,forwardInfo] = solveforward(q,uWarm,pde,option,...
         node,elem,bdFlag,xBeta,yBeta,L);
@@ -118,13 +122,19 @@ for k = 1:maxInverseIt
     gradient = G'*adjoint;
 
     betaCurrent = exp(q);
+    betaTrueVector = exp(qTrue);
     history.objective(k) = objective;
     history.dataResidual(k) = sqrt((topWeight'*(residual.^2))/dataNormSquared);
-    history.parameterError(k) = norm(betaCurrent-exp(qTrue))/norm(exp(qTrue));
+    history.parameterError(k) = norm(betaCurrent-betaTrueVector)/...
+        norm(betaTrueVector);
+    history.parameterErrorLinf(k) = norm(betaCurrent-betaTrueVector,inf);
+    history.parameterErrorRelativeLinf(k) = ...
+        history.parameterErrorLinf(k)/norm(betaTrueVector,inf);
     history.gradientNorm(k) = norm(gradient);
 
     if norm(gradient) < gradientTolerance
-        fprintf('%3d  %.04e    %.04e    %.04e    %.04e    %5d     -   0\n',...
+        fprintf(['%3d  %.04e    %.04e    %.04e    %.04e    %5d   ',...
+            '  -       -     0\n'],...
             k,objective,history.dataResidual(k),history.parameterError(k),...
             norm(gradient),forwardInfo.itStep);
         history = trimhistory(history,k);
@@ -133,7 +143,8 @@ for k = 1:maxInverseIt
 
     hessian = @(direction) gaussnewtonproduct(direction,eqn,G,...
         topDof,topWeight,dataNormSquared,lambda);
-    [step,flag,~,pcgIt] = pcg(hessian,-gradient,pcgTolerance,pcgMaxIt);
+    [step,flag,pcgRel,pcgIt] = pcg(...
+        hessian,-gradient,pcgTolerance,pcgMaxIt);
     if flag ~= 0
         warning('iFEM:ISMIPHOMC3AdjInvPCG',...
             'PCG did not reach the requested tolerance.');
@@ -165,9 +176,10 @@ for k = 1:maxInverseIt
         lambda = 10*lambda;
     end
 
-    fprintf('%3d  %.04e    %.04e    %.04e    %.04e    %5d   %3d  %2d\n',...
+    fprintf(['%3d  %.04e    %.04e    %.04e    %.04e    %5d   ',...
+        '%3d  %.04e  %2d\n'],...
         k,objective,history.dataResidual(k),history.parameterError(k),...
-        norm(gradient),forwardInfo.itStep,pcgIt,lineSearchCount);
+        norm(gradient),forwardInfo.itStep,pcgIt,pcgRel,lineSearchCount);
 
     if k == maxInverseIt
         history = trimhistory(history,k);
@@ -193,11 +205,26 @@ title('recovered beta');
 xlabel('x'); ylabel('y'); zlabel('\beta');
 
 figure(2);
-semilogy(1:numel(history.objective),history.objective,'o-',...
-    1:numel(history.parameterError),history.parameterError,'s-');
+iteration = 1:numel(history.objective);
+subplot(1,2,1);
+semilogy(iteration,history.objective,'o-');
 grid on;
-legend('objective','relative beta error','Location','best');
 xlabel('inverse iteration');
+ylabel('objective');
+title('objective history');
+
+subplot(1,2,2);
+semilogy(iteration,history.parameterErrorLinf,'s-',...
+    'DisplayName','absolute beta Linf');
+hold on;
+semilogy(iteration,history.parameterErrorRelativeLinf,'^-',...
+    'DisplayName','relative beta Linf');
+hold off;
+grid on;
+xlabel('inverse iteration');
+ylabel('\beta error');
+legend('Location','best');
+title('\beta error history');
 
 function product = gaussnewtonproduct(direction,eqn,G,topDof,...
         topWeight,dataNormSquared,lambda)

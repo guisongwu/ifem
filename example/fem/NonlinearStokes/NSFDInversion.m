@@ -336,12 +336,21 @@ title(sprintf('FD slab-bed beta inversion: true %s, perturbation %s',...
 
 figure(2);
 set(gcf,'Visible','on');
+iteration = 1:numel(history.objective);
+subplot(1,2,1);
+semilogy(iteration,history.objective,'o-',...
+    'LineWidth',1.4,'DisplayName','objective');
+grid on;
+xlabel('inverse iteration');
+ylabel('objective');
+legend('Location','best');
+title('objective history');
+
 iteration = 1:numel(history.parameterError);
-semilogy(iteration,history.parameterError,'o-',...
-    'LineWidth',1.4,'DisplayName','relative L2');
-hold on;
+subplot(1,2,2);
 semilogy(iteration,history.parameterErrorLinf,'s-',...
     'LineWidth',1.4,'DisplayName','absolute Linf');
+hold on;
 semilogy(iteration,history.parameterErrorRelativeLinf,'^-',...
     'LineWidth',1.4,'DisplayName','relative Linf');
 hold off;

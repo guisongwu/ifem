@@ -143,13 +143,15 @@ fprintf(['  beta true: %s, initial perturbation: %s, ',...
 
 %% Inverse options
 maxInverseIt = getconfig(foInvConfig,'maxInverseIt',50);
-alpha = getconfig(foInvConfig,'alpha',1e-11); % iteration 14
+alpha = getconfig(foInvConfig,'alpha',0); %
+% alpha = getconfig(foInvConfig,'alpha',1e-11); % iteration 14
 % alpha = getconfig(foInvConfig,'alpha',1e-12); % iteration 23
 lambda = getconfig(foInvConfig,'lambda',1e-8);
 pcgTolerance = 1e-8;
 pcgMaxIt = 50;
 stepTolerance = 1e-7;
 gradientTolerance = 1e-9;
+objectiveTolerance = 1e-15;
 useLineSearch = getconfig(foInvConfig,'useLineSearch',defaultlinesearch());
 
 history.objective = NaN(maxInverseIt,1);
@@ -167,6 +169,7 @@ uWarm = [];
 optimizationForwardSolves = 0;
 printiterationheader();
 for k = 1:maxInverseIt
+    iterationTimer = tic;
     [u,eqn,forwardInfo] = solveforward(q,uWarm,pde,option,xBeta,L);
     optimizationForwardSolves = optimizationForwardSolves+1;
     assert(forwardInfo.converged,...
@@ -206,10 +209,20 @@ for k = 1:maxInverseIt
             derivativeCheck.forwardSolves;
     end
 
+    if objective < objectiveTolerance
+        iterationTime = toc(iterationTimer);
+        printiterationrow(k,objective,history.parameterErrorRelativeLinf(k),...
+            norm(gradient),forwardInfo.itStep,NaN,NaN,0,'obj',...
+            iterationTime);
+        history = trimhistory(history,k);
+        break
+    end
+
     if norm(gradient) <= gradientTolerance
-        printiterationrow(k,objective,history.parameterErrorLinf(k),...
-            history.parameterErrorRelativeLinf(k),norm(gradient),...
-            forwardInfo.itStep,NaN,NaN,0,'grad');
+        iterationTime = toc(iterationTimer);
+        printiterationrow(k,objective,history.parameterErrorRelativeLinf(k),...
+            norm(gradient),forwardInfo.itStep,NaN,NaN,0,'grad',...
+            iterationTime);
         history = trimhistory(history,k);
         break
     end
@@ -224,9 +237,10 @@ for k = 1:maxInverseIt
     end
 
     if norm(step) <= stepTolerance*max(1,norm(q))
-        printiterationrow(k,objective,history.parameterErrorLinf(k),...
-            history.parameterErrorRelativeLinf(k),norm(gradient),...
-            forwardInfo.itStep,pcgIt,relativeResidual,0,'step');
+        iterationTime = toc(iterationTimer);
+        printiterationrow(k,objective,history.parameterErrorRelativeLinf(k),...
+            norm(gradient),forwardInfo.itStep,pcgIt,relativeResidual,0,...
+            'step',iterationTime);
         history = trimhistory(history,k);
         break
     end
@@ -280,9 +294,10 @@ for k = 1:maxInverseIt
         end
     end
 
-    printiterationrow(k,objective,history.parameterErrorLinf(k),...
-        history.parameterErrorRelativeLinf(k),norm(gradient),...
-        forwardInfo.itStep,pcgIt,relativeResidual,lineSearchCount,'');
+    iterationTime = toc(iterationTimer);
+    printiterationrow(k,objective,history.parameterErrorRelativeLinf(k),...
+        norm(gradient),forwardInfo.itStep,pcgIt,relativeResidual,...
+        lineSearchCount,'',iterationTime);
 
     if k == maxInverseIt
         history = trimhistory(history,k);
@@ -324,12 +339,21 @@ title(sprintf('FO sin-bed beta inversion: true %s, perturbation %s',...
     betaTrueName,perturbationName));
 
 figure(2);
+iteration = 1:numel(history.objective);
+subplot(1,2,1);
+semilogy(iteration,history.objective,'o-',...
+    'LineWidth',1.4,'DisplayName','objective');
+grid on;
+xlabel('inverse iteration');
+ylabel('objective');
+legend('Location','best');
+title('objective history');
+
 iteration = 1:numel(history.parameterError);
-semilogy(iteration,history.parameterError,'o-',...
-    'LineWidth',1.4,'DisplayName','relative L2');
-hold on;
+subplot(1,2,2);
 semilogy(iteration,history.parameterErrorLinf,'s-',...
     'LineWidth',1.4,'DisplayName','absolute Linf');
+hold on;
 semilogy(iteration,history.parameterErrorRelativeLinf,'^-',...
     'LineWidth',1.4,'DisplayName','relative Linf');
 hold off;
@@ -340,16 +364,6 @@ legend('Location','best');
 title('\beta error history');
 
 figure(3);
-iteration = 1:numel(history.objective);
-semilogy(iteration,history.objective,'o-',...
-    'LineWidth',1.4,'DisplayName','objective');
-grid on;
-xlabel('inverse iteration');
-ylabel('objective');
-legend('Location','best');
-title('objective history');
-
-figure(4);
 [uRecovered,~,~,~,~,~] = solveforward(q,uWarm,pde,option,xBeta,L);
 plot(xObs,dataObs,'ko',xObs,uRecovered(topDof),'r-',...
     'LineWidth',1.4);
@@ -358,7 +372,7 @@ xlabel('x');
 ylabel('surface horizontal velocity');
 legend('observation','recovered prediction','Location','best');
 
-figure(5);
+figure(4);
 nNode = size(node,1);
 subplot(1,2,1);
 showmesh(node,elem);
@@ -517,9 +531,9 @@ function [node,elem] = rectanglemesh(L,H,Nx,Nz)
 end
 
 function printiterationheader()
-    width = [3,12,12,11,12,7,5,10,2,4];
-    label = {'it','objective','betaLinfAbs','betaLinfRel',...
-        '|grad|','fPicard','pcgIt','pcgRel','ls','stop'};
+    width = [3,12,11,12,7,5,10,2,10,4];
+    label = {'it','objective','betaLinfRel','|grad|','fPicard',...
+        'pcgIt','pcgRel','ls','time','stop'};
     fprintf('\n');
     fprintf('%s %s %s %s %s %s %s %s %s %s\n',...
         centertext(label{1},width(1)),centertext(label{2},width(2)),...
@@ -535,17 +549,18 @@ function printiterationheader()
         repmat('-',1,width(9)),repmat('-',1,width(10)));
 end
 
-function printiterationrow(k,objective,betaLinfAbs,betaLinfRel,...
+function printiterationrow(k,objective,betaLinfRel,...
         gradientNorm,forwardPicard,pcgIt,pcgRel,...
-        lineSearchCount,stopReason)
-    width = [3,12,12,11,12,7,5,10,2,4];
+        lineSearchCount,stopReason,iterationTime)
+    width = [3,12,11,12,7,5,10,2,10,4];
     if isnan(pcgIt), pcgItText = '-'; else, pcgItText = sprintf('%d',pcgIt); end
     if isnan(pcgRel), pcgRelText = '-'; else, pcgRelText = sprintf('%.04e',pcgRel); end
     if isempty(stopReason), stopReason = '-'; end
     value = {sprintf('%d',k),sprintf('%.04e',objective),...
-        sprintf('%.04e',betaLinfAbs),sprintf('%.04e',betaLinfRel),...
-        sprintf('%.04e',gradientNorm),sprintf('%d',forwardPicard),...
-        pcgItText,pcgRelText,sprintf('%d',lineSearchCount),stopReason};
+        sprintf('%.04e',betaLinfRel),sprintf('%.04e',gradientNorm),...
+        sprintf('%d',forwardPicard),pcgItText,pcgRelText,...
+        sprintf('%d',lineSearchCount),sprintf('%.2f',iterationTime),...
+        stopReason};
     fprintf('%s %s %s %s %s %s %s %s %s %s\n',...
         centertext(value{1},width(1)),centertext(value{2},width(2)),...
         centertext(value{3},width(3)),centertext(value{4},width(4)),...
