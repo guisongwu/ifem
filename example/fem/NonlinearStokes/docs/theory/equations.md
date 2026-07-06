@@ -1,13 +1,13 @@
 # 非线性 Stokes 反问题中的四个方程
 
-本文从连续数学角度整理非线性 Stokes 冰流反问题中的四类方程：
+本文从连续 PDE 角度整理非线性 Stokes 冰流反问题中的四类方程：
 
 1. 正问题；
 2. 增量正问题；
 3. 伴随问题；
 4. 增量伴随问题。
 
-目标是说明这些方程各自从哪里来、每个符号表示什么，以及它们如何组成伴随反演和 Gauss--Newton 方法。本文只讨论连续形式，不涉及离散矩阵或数值实现。
+目标是说明这些方程从哪里来、每个符号表示什么，以及它们如何组成伴随反演和 Gauss--Newton 方法。本文只讨论连续形式，不涉及离散矩阵或数值实现。
 
 本文取底部线性滑移，即滑移指数 $m=1$。通用 $m$ 的版本见 `stress-linearization.md`。
 
@@ -18,13 +18,13 @@
 $$
 \delta F(u)[\tilde u]
 =
-\left.\frac{d}{dt}F(u+t\tilde u)\right|_{t=0}
+\left.\frac{\mathrm{d}}{\mathrm{d}t}F(u+t\tilde u)\right|_{t=0}
 =
 \lim_{t\to 0}
 \frac{F(u+t\tilde u)-F(u)}{t}.
 $$
 
-这里 $\delta F(u)$ 表示 $F$ 在 $u$ 处的一阶线性化，方括号中的 $\tilde u$ 表示这个线性化算子作用的方向。因此 $\delta F(u)[\tilde u]$ 不是新的物理量，而是 $F$ 沿方向 $\tilde u$ 的一阶变化。
+这里 $\delta F(u)$ 表示 $F$ 在 $u$ 处的一阶线性化，方括号中的 $\tilde u$ 表示这个线性化算子作用的方向。
 
 若 $F$ 是 Frechet 可微的，则还可以写成
 
@@ -32,7 +32,9 @@ $$
 \delta F(u)[\tilde u]=F'(u)\tilde u,
 $$
 
-其中 $F'(u)$ 是 $F$ 在 $u$ 处的导数算子。本文后面出现的目标函数变分、残差变分、应力变分都采用这个记号。
+其中 $F'(u)$ 是 $F$ 在 $u$ 处的导数算子。
+
+本文后面出现的目标函数变分、残差变分、应力变分都采用以上记号。
 
 ## 记号约定
 
@@ -46,19 +48,11 @@ $$
 - $(\tilde{\boldsymbol u},\tilde p)$ 表示参数扰动引起的状态增量；
 - $(\tilde{\boldsymbol v},\tilde r)$ 表示对应的增量伴随变量。
 
-$\delta$ 表示变分、方向导数或参数扰动方向。若函数 $F$ 对变量 $x$ 求变分并作用在方向 $h$ 上，本文记作 $\delta F(x)[h]$；二阶变分记作 $\delta^2F(x)[h_1,h_2]$。参数扰动仍记作
+$\delta$ 表示变分、方向导数或参数扰动方向。如
 
-$$
-\delta\beta,\quad \delta q.
-$$
-
-特别地，
-
-$$
-\delta\boldsymbol\sigma(\bm u,p)[\tilde{\boldsymbol u},\tilde p]
-$$
-
-表示应力 $\boldsymbol\sigma$ 对状态变量 $(\boldsymbol u,p)$ 的一阶变分，作用在方向 $(\tilde{\boldsymbol u},\tilde p)$ 上。这里的 $\delta\boldsymbol\sigma(\bm u,p)$ 不是新的物理应力，而是线性化应力算子。
+- 若函数 $F$ 对变量 $x$ 求变分并作用在方向 $h$ 上，本文记作 $\delta F(x)[h]$, 有时也记作 $\delta_xF[h]$；
+- 参数扰动仍记作 $\delta\beta,\delta q$;
+- $\delta\boldsymbol\sigma(\bm u,p)[\tilde{\boldsymbol u},\tilde p]$ 表示应力 $\boldsymbol\sigma$ 对状态变量 $(\boldsymbol u,p)$ 的一阶变分，作用在方向 $(\tilde{\boldsymbol u},\tilde p)$ 上。
 
 ## 几何、应力与滑移律
 
@@ -136,9 +130,9 @@ $$
 $$
 \left\{
 \begin{aligned}
-\nabla\cdot\boldsymbol u &=0
-&&\text{in }\Omega,\\
 -\nabla\cdot\boldsymbol\sigma &= \textcolor{red}{\rho\boldsymbol g}
+&&\text{in }\Omega,\\
+\nabla\cdot\boldsymbol u &=0
 &&\text{in }\Omega,\\
 \boldsymbol\sigma\boldsymbol n &= \boldsymbol 0
 &&\text{on }\Gamma_t,\\
@@ -167,36 +161,24 @@ $$
 p\boldsymbol I.
 $$
 
-也可以把正问题抽象写成非线性残差方程
+其中 $\boldsymbol\sigma_{\rm visc}=2\eta(\boldsymbol u)\dot{\boldsymbol\varepsilon}_{\boldsymbol u}$ 是黏性应力，也可以把正问题抽象写成非线性残差方程:
 
 $$
 \mathcal R(\boldsymbol u,p,\beta)=0.
 $$
 
-这里 $\mathcal R$ 收集了动量方程、不可压缩条件、顶部自然边界条件、底部不可穿透条件、底部滑移条件和周期条件的残差。例如体内动量残差是
-
-$$
--\nabla\cdot\boldsymbol\sigma-\rho\boldsymbol g,
-$$
-
-底部滑移残差是
-
-$$
-\boldsymbol T\boldsymbol\sigma\boldsymbol n+\beta\boldsymbol u_t.
-$$
-
-若 $(\boldsymbol u,p)$ 是给定 $\beta$ 下的正问题解，则这些残差同时为零。
+这里 $\mathcal R$ 收集了动量方程、不可压缩条件、顶部自然边界条件、底部不可穿透条件、底部滑移条件和周期条件的残差。若 $(\boldsymbol u,p)$ 是给定 $\beta$ 下的正问题解，则这些残差同时为零。
 
 ## 目标函数
 
-假设顶部有水平速度观测 $u_{\rm obs}$。目标函数取为
+假设顶部有水平速度观测 $u_{\rm obs}$, 目标函数取为
 
 $$
 J(\boldsymbol u)
 =
 \frac12
 \int_{\Gamma_t}
-\left(u_x-u_{\rm obs}\right)^2\,ds,
+\left(u_x-u_{\rm obs}\right)^2\,\mathrm{d}s,
 $$
 
 其中
@@ -205,36 +187,22 @@ $$
 u_x=\boldsymbol u\cdot\boldsymbol e_x.
 $$
 
-对状态变量 $\boldsymbol u$ 沿方向 $\tilde{\boldsymbol u}$ 求一阶变分。因为
+对状态变量 $\boldsymbol u$ 沿方向 $\tilde{\boldsymbol u}$ 求一阶变分。
 
 $$
-(\boldsymbol u+t\tilde{\boldsymbol u})\cdot\boldsymbol e_x
-=
-u_x+t\tilde u_x,
-\qquad
-\tilde u_x=\tilde{\boldsymbol u}\cdot\boldsymbol e_x,
-$$
-
-所以
-
-$$
+\begin{aligned}
 \delta J(\boldsymbol u)[\tilde{\boldsymbol u}]
-=
+&=
 \int_{\Gamma_t}
-\left(u_x-u_{\rm obs}\right)\tilde u_x\,ds.
-$$
-
-也可以写成
-
-$$
-\delta J(\boldsymbol u)[\tilde{\boldsymbol u}]
-=
+\left(u_x-u_{\rm obs}\right)\tilde u_x\,ds \\
+&=
 \int_{\Gamma_t}
 \left[
 \left(u_x-u_{\rm obs}\right)\boldsymbol e_x
 \right]
 \cdot
-\tilde{\boldsymbol u}\,ds.
+\tilde{\boldsymbol u}\,\mathrm{d}s.
+\end{aligned}
 $$
 
 这个顶部边界项会成为伴随方程顶部边界条件的来源。
@@ -299,7 +267,7 @@ $$
 \frac12 A^{-1/n}\varepsilon_\text{II}^{\frac{1-n}{2n}}.
 $$
 
-也可以把黏性部分写成四阶切线张量形式，黏性应力为 $\boldsymbol\sigma_{\rm visc}=2\eta(\boldsymbol u)\dot{\boldsymbol\varepsilon}_{\boldsymbol u}$。
+也可以把黏性部分写成四阶切线张量形式。
 
 若黏度只依赖应变率第二不变量
 
@@ -373,7 +341,7 @@ $$
 \tilde p\boldsymbol I.
 $$
 
-因此 $\mathbb C(\boldsymbol u)$ 不是额外的物理模型，而是非线性黏性应力 $2\eta(\boldsymbol u)\dot{\boldsymbol\varepsilon}_{\boldsymbol u}$ 对当前速度场的一阶导数。若只保留 $2\eta\dot{\boldsymbol\varepsilon}_{\tilde{\boldsymbol u}}$，就是冻结黏度的 Picard 线性化；包含黏度导数项的完整表达式才是一致切线。
+若只保留 $2\eta\dot{\boldsymbol\varepsilon}_{\tilde{\boldsymbol u}}$，就是冻结黏度的 Picard 线性化；包含黏度导数项的完整表达式才是一致切线。
 
 ### 底部滑移线性化
 
@@ -386,7 +354,7 @@ $$
 对状态方向 $\tilde{\boldsymbol u}$，有
 
 $$
-D_{\boldsymbol u}
+\delta_{\boldsymbol u}
 \left(
 \beta\boldsymbol u_t
 \right)
@@ -398,7 +366,7 @@ $$
 对参数方向 $\delta\beta$，有
 
 $$
-D_\beta
+\delta_\beta
 \left(
 \beta\boldsymbol u_t
 \right)
@@ -434,16 +402,16 @@ $$
 [0,0,\delta\beta],
 $$
 
-得到强形式
+得到增量正问题的强形式：
 
 $$
 \left\{
 \begin{aligned}
-\nabla\cdot\tilde{\boldsymbol u} &=0
-&&\text{in }\Omega,\\
 -\nabla\cdot
 \delta\boldsymbol\sigma(\bm u,p)[\tilde{\boldsymbol u},\tilde p]
 &=\boldsymbol 0
+&&\text{in }\Omega,\\
+\nabla\cdot\tilde{\boldsymbol u} &=0
 &&\text{in }\Omega,\\
 \delta\boldsymbol\sigma(\bm u,p)[\tilde{\boldsymbol u},\tilde p]\boldsymbol n
 &=\boldsymbol 0
@@ -465,13 +433,15 @@ $$
 \right.
 $$
 
-右端只出现在底部，是因为 $\beta$ 只出现在底部滑移边界条件中。
+源项只出现在底部，是因为 $\beta$ 只出现在底部滑移边界条件中。
 
 ## 伴随问题
 
 如果直接计算约化目标函数在方向 $\delta\beta$ 上的一阶变分 $\delta J(\beta)[\delta\beta]$，需要知道每个参数方向 $\delta\beta$ 对应的状态扰动 $\tilde{\boldsymbol u}$。伴随方法的目的，是用一个伴随问题消去 $\tilde{\boldsymbol u}$，从而直接得到关于 $\delta\beta$ 的梯度表达。
 
-令增量正问题的线性算子为
+伴随问题来自增量正问题线性化算子的转置，以及顶部目标函数变分与边界项的抵消。完整的分部积分推导见 [adjoint-derivation.md](adjoint-derivation.md)。本文只记录所采用的符号约定和最终强形式。
+
+记增量正问题的状态线性化算子为
 
 $$
 \mathcal A(\tilde{\boldsymbol u},\tilde p)
@@ -480,7 +450,7 @@ $$
 [\tilde{\boldsymbol u},\tilde p,0].
 $$
 
-伴随算子 $\mathcal A^*$ 由弱形式内积定义：
+伴随算子 $\mathcal A^*$ 由同一弱形式配对定义：
 
 $$
 \left\langle
@@ -496,30 +466,7 @@ $$
 \text{boundary terms}.
 $$
 
-这就是“伴随方程使用线性化算子的转置”的含义。有限维类比是：增量正问题使用 $A$，伴随问题使用 $A^T$。
-
-为了抵消目标函数变分
-
-$$
-\delta J(\boldsymbol u)[\tilde{\boldsymbol u}]
-=
-\int_{\Gamma_t}
-\left(u_x-u_{\rm obs}\right)\tilde u_x\,ds,
-$$
-
-伴随顶部边界条件取为
-
-$$
-\delta\boldsymbol\sigma^*(\bm u,p)[\boldsymbol v,r]\boldsymbol n
-=
--
-\left(u_x-u_{\rm obs}\right)\boldsymbol e_x
-\qquad\text{on }\Gamma_t.
-$$
-
-其中负号来自把目标函数变分移到伴随方程边界项的另一侧。若采用不同的拉格朗日函数符号约定，伴随变量可能整体差一个负号，但梯度公式会相应保持一致。
-
-若
+若增量正问题的线性化应力为
 
 $$
 \delta\boldsymbol\sigma(\bm u,p)[\tilde{\boldsymbol u},\tilde p]
@@ -554,11 +501,11 @@ $$
 $$
 \left\{
 \begin{aligned}
-\nabla\cdot\boldsymbol v &=0
-&&\text{in }\Omega,\\
 -\nabla\cdot
 \delta\boldsymbol\sigma^*(\bm u,p)[\boldsymbol v,r]
 &=\boldsymbol 0
+&&\text{in }\Omega,\\
+\nabla\cdot\boldsymbol v &=0
 &&\text{in }\Omega,\\
 \delta\boldsymbol\sigma^*(\bm u,p)[\boldsymbol v,r]\boldsymbol n
 &=
@@ -644,11 +591,11 @@ $$
 $$
 \left\{
 \begin{aligned}
-\nabla\cdot\tilde{\boldsymbol v} &=0
-&&\text{in }\Omega,\\
 -\nabla\cdot
 \delta\boldsymbol\sigma^*(\bm u,p)[\tilde{\boldsymbol v},\tilde r]
 &=\boldsymbol 0
+&&\text{in }\Omega,\\
+\nabla\cdot\tilde{\boldsymbol v} &=0
 &&\text{in }\Omega,\\
 \delta\boldsymbol\sigma^*(\bm u,p)[\tilde{\boldsymbol v},\tilde r]\boldsymbol n
 &=
