@@ -56,8 +56,9 @@ N = size(node, 1);
 NE = size(edge,1);
 Nu = N + NE; % velocity u using P2
 Np = N; % pressure p using P1 
-Nm = n1; % parameter m with n1 dof
-EI = eye(Nm);
+Nbeta = n1; % parameter beta with n1 dof
+Nm = Nbeta; % legacy helper scripts still read Nm from the caller workspace
+EI = eye(Nbeta);
 
 if slope ~= 0
     %  
@@ -116,19 +117,19 @@ pde.exactuy = [];
 pde.exactu = [];
 pde.g_D = [];
 
-% Set initial m0
+% Set initial beta0
 if 0
-    fprintf('Const m0\n');
+    fprintf('Const beta0\n');
     pde.g_R = 0*xbot + 1; %pde.g_R(pt_bot); 
     % pde.g_R = pde.g_R(pt_bot); 
 else
-    fprintf('Variable m0\n');
+    fprintf('Variable beta0\n');
     pde.g_R = 1 + mp('0.1') * cos(2 * xbot * mp('pi') + 0.1 * pi);
     pde.g_R = linearize_bot(pde.g_R);
 end
 
 pde.g_R = linearize_bot(pde.g_R);
-m0 = pde.g_R;
+beta0 = pde.g_R;
 
 
 pde.g_N = linearize_top(pde.g_N);
@@ -140,7 +141,7 @@ pde.g_Dn = (pde.g_Dn);
 [soln,eqn,info] = StokesP2P1_periodic(node,elem,bdFlag,pde,option);
 uh = soln.u;
 ph = soln.p;
-u_obs = [uh(IUxTop), uh(IUyTop)];   % Observation corresbone to m0
+u_obs = [uh(IUxTop), uh(IUyTop)];   % Observation corresbone to beta0
 
 
 plt1 = subplot(plot_m, plot_n, 1);
@@ -168,56 +169,56 @@ elseif 0
     error('stop')
 end
 
-%%  Initial m
+%%  Initial beta
 %
 if 0
-    m = m0 + mp('0.02');
+    beta = beta0 + mp('0.02');
 elseif 0
-    m = m0 + mp('0.1') * sin(xbot * mp('pi'));
+    beta = beta0 + mp('0.1') * sin(xbot * mp('pi'));
 elseif 1
     % mo ren zhe ge
-    %m = m0 + mp('1e-5') * (sin(xbot * mp('pi') * two) + 0.25);
-    m = m0 + mp('0.1') * (sin(xbot * mp('pi') * two) + 0.25);
-    %m = m0 + mp('0.001') * (sin(xbot * mp('pi') * two));
+    %beta = beta0 + mp('1e-5') * (sin(xbot * mp('pi') * two) + 0.25);
+    beta = beta0 + mp('0.1') * (sin(xbot * mp('pi') * two) + 0.25);
+    %beta = beta0 + mp('0.001') * (sin(xbot * mp('pi') * two));
 elseif 0
-    %m = m0 + mp('0.1') * sin(xbot * mp('pi') * three);
-    m = m0 + mp('0.05') * sin(xbot * mp('pi') * four);
+    %beta = beta0 + mp('0.1') * sin(xbot * mp('pi') * three);
+    beta = beta0 + mp('0.05') * sin(xbot * mp('pi') * four);
 elseif 0
-    m = m0 + mp('0.01') * sin(xbot * mp('pi') * two) ...
+    beta = beta0 + mp('0.01') * sin(xbot * mp('pi') * two) ...
         + mp('0.1') * sin(xbot * mp('pi'));
 elseif 0
-    m = m0 + mp('0.001') * rand(n,1) ...
+    beta = beta0 + mp('0.001') * rand(n,1) ...
         + mp('0.0001') * sin(xbot * mp('pi'));
 elseif 0
-    m = m0 - 0.1;
+    beta = beta0 - 0.1;
 elseif 0
     % not working
-    m = m + 0.01 * (rand(2*Nm,1) - 0.5);
+    beta = beta + 0.01 * (rand(2*Nbeta,1) - 0.5);
 else
-    m = xbot*0 + 1;
+    beta = xbot*0 + 1;
 end
 
-m = linearize_bot(m);
+beta = linearize_bot(beta);
 
-pde.g_R = m;
+pde.g_R = beta;
 plt3 = subplot(plot_m, plot_n, 3);
-%plot(xbot, m0, '-', xbot, m, 'x-');
-plot([sft(xbot); sft(xbot)+1], [sft(m0); sft(m0)], '-', ...
-     [sft(xbot); sft(xbot)+1], [sft(m); sft(m)], '-x');
-legend('m0', 'm');
-title('m', 'FontSize', 14);
+%plot(xbot, beta0, '-', xbot, beta, 'x-');
+plot([sft(xbot); sft(xbot)+1], [sft(beta0); sft(beta0)], '-', ...
+     [sft(xbot); sft(xbot)+1], [sft(beta); sft(beta)], '-x');
+legend('beta0', 'beta');
+title('beta', 'FontSize', 14);
 
 
 
 %% Solve du
-% solve L(u, m) = f.
+% solve L(u, beta) = f.
 [soln,eqn,info] = StokesP2P1_periodic(node,elem,bdFlag,pde,option);
-um = soln.u;
+ubeta = soln.u;
 
 
 % plot the difference
 plt2 = subplot(plot_m, plot_n, 2);
-trisurf(elem, node(:,1), node(:,2), um(IUxNode) - uh(IUxNode), ...
+trisurf(elem, node(:,1), node(:,2), ubeta(IUxNode) - uh(IUxNode), ...
         'FaceColor', 'interp', 'EdgeColor', 'interp');
 axis equal;
 axis tight;
@@ -229,105 +230,105 @@ view(2);
 
 
 %% Objective
-dXidu = two*([um(IUxTop) - u_obs(:,1), xtop*0]);
+dJdu = two*([ubeta(IUxTop) - u_obs(:,1), xtop*0]);
 
 
 plt4 = subplot(plot_m, plot_n, 4);
 size(xbot);
-size(dXidu(:,1));
-plot(sft(xbot), sft(dXidu(:,1)), '-');
-%plot(sft(xbot), sft(dXidu(:,2)), '-');
+size(dJdu(:,1));
+plot(sft(xbot), sft(dJdu(:,1)), '-');
+%plot(sft(xbot), sft(dJdu(:,2)), '-');
 xlabel('x');
-legend('dXidu x');
-%legend('dXidu y');
-%legend('dXidu x', 'dXidu y');
+legend('dJdu x');
+%legend('dJdu y');
+%legend('dJdu x', 'dJdu y');
 %ylabel('y');
-title('dXidu', 'FontSize', 14);
+title('dJdu', 'FontSize', 14);
 
 
 
 
 
-%% dXidm Adjoint
+%% dJdbeta Adjoint
 % Solve adj 
 %
 pde_adj = pde;
 pde_adj.f = 0;
 pde_adj.fp = 0;
-pde_adj.g_N = -[linearize_top(dXidu(:,1)), xtop*0];
-pde_adj.g_R = m;
+pde_adj.g_N = -[linearize_top(dJdu(:,1)), xtop*0];
+pde_adj.g_R = beta;
 pde_adj.g_RN = [xbot*0, xbot*0];
 pde_adj.g_Dn = [xbot*0, xbot*0];
 [soln,eqn,info] = StokesP2P1_periodic(node,elem,bdFlag,pde_adj,option);
-ustar = soln.u;
+v_adj = soln.u;
 
 
-% dXidm = <ustar, dLdm dm>
-% dLdm 
-dLdm = [um(IUxBot), um(IUyBot)];
-%dXidm = h*ustar(IUxBot) .* dLdm;
-dXidm = zeros(Nm, 1);
-for ii = 1:Nm
-    m1 = extend_mid(EI(:, ii));
-    dXidm(ii) = integral_robin_P2(node, elem, bdFlag, ...
-                                  [ustar(IUxBot), ustar(IUyBot)], ...
-                                  dLdm, ...
-                                  [m1, m1], option);
+% dJdbeta = <v_adj, dLdbeta dbeta>
+% dLdbeta 
+dLdbeta = [ubeta(IUxBot), ubeta(IUyBot)];
+%dJdbeta = h*v_adj(IUxBot) .* dLdbeta;
+dJdbeta = zeros(Nbeta, 1);
+for ii = 1:Nbeta
+    beta1 = extend_mid(EI(:, ii));
+    dJdbeta(ii) = integral_robin_P2(node, elem, bdFlag, ...
+                                  [v_adj(IUxBot), v_adj(IUyBot)], ...
+                                  dLdbeta, ...
+                                  [beta1, beta1], option);
 end
-dXidm = extend_mid(dXidm);
+dJdbeta = extend_mid(dJdbeta);
 
 % Check with 1D
-fprintf('dXidm using adjoint\n');
-fprintf('\t%.8e\n', dXidm);
+fprintf('dJdbeta using adjoint\n');
+fprintf('\t%.8e\n', dJdbeta);
 
 plt5 = subplot(plot_m, plot_n, 5);
-plot(sft(xbot), sft(dXidm), '-bx');
-title('dXidm', 'FontSize', 14);
+plot(sft(xbot), sft(dJdbeta), '-bx');
+title('dJdbeta', 'FontSize', 14);
 
 
 
-%% dXidm FD
+%% dJdbeta FD
 %
 %
 deps =  mp(1e-5);
-dXidm_FD = zeros(Nm,1);
+dJdbeta_FD = zeros(Nbeta,1);
 
 if true
-    dXidm_FD = zeros(Nm,1);
-    for i = 1:Nm
+    dJdbeta_FD = zeros(Nbeta,1);
+    for i = 1:Nbeta
         ei = extend_mid(EI(:, i));
 
         pde_test = pde;
-        pde_test.g_R = m + ei*deps;
+        pde_test.g_R = beta + ei*deps;
         [soln,eqn,info] = StokesP2P1_periodic(node,elem,bdFlag,pde_test,option);
         um1 = soln.u;
 
-        pde_test.g_R = m - ei*deps;
+        pde_test.g_R = beta - ei*deps;
         [soln,eqn,info] = StokesP2P1_periodic(node,elem,bdFlag,pde_test,option);
         um2 = soln.u;
         
-        %dXidm_FD(i) = sum( (um1(IUxTop)-u_obs(:,1)).^2 - (um2(IUxTop)-u_obs(:,1)).^2 ) *h / deps / 2;
-        dXidm_FD(i) = (integral_neumann_P2(node, elem, bdFlag, ...
+        %dJdbeta_FD(i) = sum( (um1(IUxTop)-u_obs(:,1)).^2 - (um2(IUxTop)-u_obs(:,1)).^2 ) *h / deps / 2;
+        dJdbeta_FD(i) = (integral_neumann_P2(node, elem, bdFlag, ...
                                            linearize_top(um1(IUxTop)-u_obs(:,1)), 'repeat', [], option) ...
                        - integral_neumann_P2(node, elem, bdFlag, ...
                                              linearize_top(um2(IUxTop)-u_obs(:,1)), 'repeat', [], option)) ...
                                              / deps / 2;
-        % fprintf('dXidm(%d) using FD, %.8e\n', i, dXidm_FD(i));
+        % fprintf('dJdbeta(%d) using FD, %.8e\n', i, dJdbeta_FD(i));
     end
-    dXidm_FD = extend_mid(dXidm_FD);
+    dJdbeta_FD = extend_mid(dJdbeta_FD);
     
     plt5 = subplot(plot_m, plot_n, 5);
     hold on
-    plot(sft(xbot), sft(dXidm_FD), '-ro');
-    %plot(xbot, dXidm_FD, '-ro');
-    legend('dXidm adjoint', 'dXidm FD');
-    %title('dXidm');
+    plot(sft(xbot), sft(dJdbeta_FD), '-ro');
+    %plot(xbot, dJdbeta_FD, '-ro');
+    legend('dJdbeta adjoint', 'dJdbeta FD');
+    %title('dJdbeta');
 end
 
 
 
 
-%% Iterate to minimize Xi
+%% Iterate to minimize J
 figure(2);
 
 for k = 1 : max_iteration
@@ -338,20 +339,20 @@ for k = 1 : max_iteration
     % 
     % 
     pde_test = pde;
-    pde_test.g_R = m;
+    pde_test.g_R = beta;
     [soln,eqn,info] = StokesP2P1_periodic(node,elem,bdFlag,pde_test,option);
-    um = soln.u;
+    ubeta = soln.u;
     eqn0 = eqn;
 
-    % warning('um: dbg');
+    % warning('ubeta: dbg');
     % % pde_test.g_N'
     % % pde_test.g_R'
     % % pde_test.g_RN'
     % fprintf('\n\n');
 
-    fprintf('\nIter: %d, Xi: %e, err m: %e, err obs: %e\n', ...
-            k, integral_neumann_P2(node, elem, bdFlag, um(IUxTop)-u_obs(:,1), 'repeat', [], option), ...
-            norm(m - m0, Inf), norm(um(IUxTop) - u_obs(:,1), Inf) );
+    fprintf('\nIter: %d, J: %e, err beta: %e, err obs: %e\n', ...
+            k, integral_neumann_P2(node, elem, bdFlag, ubeta(IUxTop)-u_obs(:,1), 'repeat', [], option), ...
+            norm(beta - beta0, Inf), norm(ubeta(IUxTop) - u_obs(:,1), Inf) );
     
 
 
@@ -377,14 +378,14 @@ for k = 1 : max_iteration
         % 
         
         % deps =  mp('1e-9');
-        % dXidm = zeros(Nm,1);
-        % J = zeros(Nm,Nm);
-        % F = zeros(Nm,1);
+        % dJdbeta = zeros(Nbeta,1);
+        % J = zeros(Nbeta,Nbeta);
+        % F = zeros(Nbeta,1);
 
 
-        % MR = zeros(Nm);
-        % for i = 1:Nm
-        %     for j = 1:Nm
+        % MR = zeros(Nbeta);
+        % for i = 1:Nbeta
+        %     for j = 1:Nbeta
         %         MR(i, j) = integral_neumann_P2(node, elem, bdFlag, EI(:,i), EI(:,j), [], option);
         %     end
         % end
@@ -393,20 +394,20 @@ for k = 1 : max_iteration
 
        
         % % F
-        % % J = dudm with FD
-        % for i = 1:Nm
+        % % J = dudbeta with FD
+        % for i = 1:Nbeta
         %     ei = EI(:, i);
             
         %     pde_test = pde;
-        %     pde_test.g_R = m + ei*deps;
+        %     pde_test.g_R = beta + ei*deps;
         %     [soln,eqn,info] = StokesP2P1_periodic(node,elem,bdFlag,pde_test,option);
         %     um1 = soln.u;
 
-        %     pde_test.g_R = m - ei*deps;
+        %     pde_test.g_R = beta - ei*deps;
         %     [soln,eqn,info] = StokesP2P1_periodic(node,elem,bdFlag,pde_test,option);
         %     um2 = soln.u;
             
-        %     dXidm(i) = ( integral_neumann_P2(node, elem, bdFlag, um1(IUxTop)-u_obs(:,1), 'repeat', [], option) ...
+        %     dJdbeta(i) = ( integral_neumann_P2(node, elem, bdFlag, um1(IUxTop)-u_obs(:,1), 'repeat', [], option) ...
         %                  - integral_neumann_P2(node, elem, bdFlag, um2(IUxTop)-u_obs(:,1), 'repeat', [], option)) ...
         %                  / deps / 2;
         %     J(:,i) =  sqrtMR * ( um1(IUxTop) - um2(IUxTop) ) / deps / 2;
@@ -425,14 +426,14 @@ for k = 1 : max_iteration
         % fprintf('\tlambda: %e\n', lambda);
 
         % if false
-        %     dXidm
+        %     dJdbeta
         %     2*J'*J
         %     error('Gauss-Newton stop')
         % end
 
-        % dm = (J'*J + lambda * eye(Nm)) \ dXidm;
-        % %[dm] = cgs(J'*J + lambda * eye(n), dXidm, 1e-6, 8);
-        % dm = 1/2*dm;
+        % dbeta = (J'*J + lambda * eye(Nbeta)) \ dJdbeta;
+        % %[dbeta] = cgs(J'*J + lambda * eye(n), dJdbeta, 1e-6, 8);
+        % dbeta = 1/2*dbeta;
 
 
     elseif scheme == 5
@@ -443,44 +444,44 @@ for k = 1 : max_iteration
         % 
         % --------------------------------------------------------------------------------
         
-        dXidm = zeros(Nm,1);
-        dXidm_FD = zeros(Nm,1);
-        d2Xidm2_NW  = zeros(Nm,Nm);     % Newton
-        d2Xidm2_GN = zeros(Nm,Nm);      % Gauss - Newton
-        d2Xidm2_FD = zeros(Nm,Nm);
+        dJdbeta = zeros(Nbeta,1);
+        dJdbeta_FD = zeros(Nbeta,1);
+        d2Jdbeta2_NW  = zeros(Nbeta,Nbeta);     % Newton
+        d2Jdbeta2_GN = zeros(Nbeta,Nbeta);      % Gauss - Newton
+        d2Jdbeta2_FD = zeros(Nbeta,Nbeta);
 
 
         
         % 
         % Primary adj: 
-        %    (dLdu)^t u^s = - dXidu^t 
+        %    (dLdu)^t u^s = - dJdu^t 
         % 
-        dXidu = two * [um(IUxTop) - u_obs(:,1), xtop*0];
+        dJdu = two * [ubeta(IUxTop) - u_obs(:,1), xtop*0];
         pde_adj = pde;
         pde_adj.f = 0;
         pde_adj.fp = 0;
-        pde_adj.g_N = -[linearize_top(dXidu(:,1)) xtop*0];
-        pde_adj.g_R = linearize_bot(m);
+        pde_adj.g_N = -[linearize_top(dJdu(:,1)) xtop*0];
+        pde_adj.g_R = linearize_bot(beta);
         pde_adj.g_RN = [xbot*0, xbot*0];
         pde_adj.g_Dn = [xbot*0, xbot*0];
         [soln,eqn,info] = StokesP2P1_periodic(node,elem,bdFlag,pde_adj,option);
-        us1 = soln.u;
+        v_adj = soln.u;
 
 
-        dLdm = [um(IUxBot) um(IUyBot)];
-        %dXidm = h*Us1(1, 1:Nm)' .* dLdm;
-        for ii = 1:Nm
-            m1 = extend_mid(EI(:, ii));
-            %dXidm(ii) = integral_robin(node, elem, bdFlag, Us1(1, 1:Nm)', dLdm.*m1, option);
-            dXidm(ii) = integral_robin_P2(node, elem, bdFlag, ...
-                                          [us1(IUxBot), us1(IUyBot)], ...
-                                          dLdm, ...
-                                          [m1, m1], ...
+        dLdbeta = [ubeta(IUxBot) ubeta(IUyBot)];
+        %dJdbeta = h*Us1(1, 1:Nbeta)' .* dLdbeta;
+        for ii = 1:Nbeta
+            beta1 = extend_mid(EI(:, ii));
+            %dJdbeta(ii) = integral_robin(node, elem, bdFlag, Us1(1, 1:Nbeta)', dLdbeta.*beta1, option);
+            dJdbeta(ii) = integral_robin_P2(node, elem, bdFlag, ...
+                                          [v_adj(IUxBot), v_adj(IUyBot)], ...
+                                          dLdbeta, ...
+                                          [beta1, beta1], ...
                                           option);
         end
 
         % Test me
-        for ii = 1:Nm
+        for ii = 1:Nbeta
         % if true
             % if dbg_case == 1
             %     ii = 1
@@ -489,23 +490,23 @@ for k = 1 : max_iteration
             % end
             
             % choose first diriction
-            m1 = extend_mid(EI(:, ii));
+            beta1 = extend_mid(EI(:, ii));
             
             % 
             % Incremental: 
-            %    (dLdu) du = - dLdm m1 
+            %    (dLdu) du = - dLdbeta beta1 
             % 
-            dLdm1 = [um(IUxBot), um(IUyBot)].*[m1, m1];
+            dLdbeta1 = [ubeta(IUxBot), ubeta(IUyBot)].*[beta1, beta1];
             %pde_du = pde;
             pde_du.f = 0;
             pde_du.fp = 0;
             pde_du.g_N = [xtop*0, xtop*0];
-            pde_du.g_R = linearize_bot(m);
-            %pde_du.g_RN = [-linearize_bot(dLdm1(:,1)), -linearize_bot(dLdm1(:,2))];
-            pde_du.g_RN = [-um(IUxBot), m1, -um(IUyBot), m1]; 
+            pde_du.g_R = linearize_bot(beta);
+            %pde_du.g_RN = [-linearize_bot(dLdbeta1(:,1)), -linearize_bot(dLdbeta1(:,2))];
+            pde_du.g_RN = [-ubeta(IUxBot), beta1, -ubeta(IUyBot), beta1]; 
             pde_du.g_Dn = [xbot*0, xbot*0];
             [soln,eqn,info] = StokesP2P1_periodic(node,elem,bdFlag,pde_du,option);
-            % [du1] = poisson_robin2D_mpfr(x, Z(:)*0, 0*x, -dLdm1, m);
+            % [du1] = poisson_robin2D_mpfr(x, Z(:)*0, 0*x, -dLdbeta1, beta);
             du1 = soln.u;
 
             %dbgDu1;
@@ -520,34 +521,34 @@ for k = 1 : max_iteration
             
             % 
             % Incremental adj: 
-            %    L^t u^s = - dXidu^t 
+            %    L^t u^s = - dJdu^t 
             % 
-            % [us2] = poisson_robin2D_mpfr(x, Z(:)*0, - two * Du1(n, :), ...
-            %                              Us1(1,:) .* m1', m);
+            % [v_newton] = poisson_robin2D_mpfr(x, Z(:)*0, - two * Du1(n, :), ...
+            %                              Us1(1,:) .* beta1', beta);
             %pde_adj2 = pde;
             pde_adj2.f = 0;
             pde_adj2.fp = 0;
             pde_adj2.g_N = - [two * linearize_top(du1(IUxTop)), xtop*0];
-            pde_adj2.g_R = linearize_bot(m);
-            pde_adj2.g_RN = - [(us1(IUxBot)), m1, (us1(IUyBot)), m1];
+            pde_adj2.g_R = linearize_bot(beta);
+            pde_adj2.g_RN = - [(v_adj(IUxBot)), beta1, (v_adj(IUyBot)), beta1];
             pde_adj2.g_Dn = [xbot*0, xbot*0];
             [soln,eqn,info] = StokesP2P1_periodic(node,elem,bdFlag,pde_adj2,option);
-            us2 = soln.u;
+            v_newton = soln.u;
 
             % 
             % Gauss Newton 
             % 
             % 
-            % [us3] = poisson_robin2D_mpfr(x, Z(:)*0, - two * Du1(n, :), ...
-            %                              0*x, m);
+            % [v_gn] = poisson_robin2D_mpfr(x, Z(:)*0, - two * Du1(n, :), ...
+            %                              0*x, beta);
             pde_adj3.f = 0;
             pde_adj3.fp = 0;
             pde_adj3.g_N = - [two * linearize_top(du1(IUxTop)), xtop*0];
-            pde_adj3.g_R = linearize_bot(m);
+            pde_adj3.g_R = linearize_bot(beta);
             pde_adj3.g_RN = [xbot*0, xbot*0];
             pde_adj3.g_Dn = [xbot*0, xbot*0];
             [soln,eqn,info] = StokesP2P1_periodic(node,elem,bdFlag,pde_adj3,option);
-            us3 = soln.u;
+            v_gn = soln.u;
            
 
             %error('debug')
@@ -557,32 +558,32 @@ for k = 1 : max_iteration
             % choose second direction and test H_ij
             % 
             %
-            for jj = 1:Nm
-                m2 = extend_mid(EI(:,jj));
+            for jj = 1:Nbeta
+                beta2 = extend_mid(EI(:,jj));
 
                 % 
-                % H_{i,j} = < us2, dLdm(u) dm2  >
-                %           + < us1, dLdm(du1) dm2  >
-                %           + < us1, d2Ldmdm(u) dm2  >
+                % H_{i,j} = < v_newton, dLdbeta(u) dbeta2  >
+                %           + < v_adj, dLdbeta(du1) dbeta2  >
+                %           + < v_adj, d2Ldbetadbeta(u) dbeta2  >
                 %
 
                 % main term
-                dLdm2 = [um(IUxBot), um(IUyBot)] .* [m2, m2];        
-                % term1 = dot(Us2(1,1:Nm)', dLdm2);
+                dLdbeta2 = [ubeta(IUxBot), ubeta(IUyBot)] .* [beta2, beta2];        
+                % term1 = dot(Us2(1,1:Nbeta)', dLdbeta2);
                 term1 = integral_robin_P2(node, elem, bdFlag, ...
-                                          [us2(IUxBot), us2(IUyBot)], ...
-                                          [um(IUxBot), um(IUyBot)], ...
-                                          [m2, m2], option);
-                % note: us2 . n | gamma_bot = 0
+                                          [v_newton(IUxBot), v_newton(IUyBot)], ...
+                                          [ubeta(IUxBot), ubeta(IUyBot)], ...
+                                          [beta2, beta2], option);
+                % note: v_newton . n | gamma_bot = 0
                 
 
                 % second term is much smaller
-                dLdm2_du1 = [du1(IUxBot), du1(IUyBot)] .* [m2, m2];        
-                % term2 = dot(Us1(1,1:Nm)', dLdm2_du1);
+                dLdbeta2_du1 = [du1(IUxBot), du1(IUyBot)] .* [beta2, beta2];        
+                % term2 = dot(Us1(1,1:Nbeta)', dLdbeta2_du1);
                 term2 = integral_robin_P2(node, elem, bdFlag, ...
-                                          [us1(IUxBot), us1(IUyBot)], ...
+                                          [v_adj(IUxBot), v_adj(IUyBot)], ...
                                           [du1(IUxBot), du1(IUyBot)], ...
-                                          [m2, m2], option);
+                                          [beta2, beta2], option);
 
                 term3 = 0;
                 term = term1 + term2 + term3;
@@ -591,7 +592,7 @@ for k = 1 : max_iteration
                     % fprintf('%e\n', [norm(Us1)
                     %                  norm(Um)
                     %                  norm(Du1)
-                    %                  norm(dLdm2)
+                    %                  norm(dLdbeta2)
                     %                  norm(Us2)]);
                     [term1 term2 term]
                 end
@@ -602,46 +603,46 @@ for k = 1 : max_iteration
                 % end
 
                 % Newton
-                d2Xidm2_NW(ii, jj) = term;
+                d2Jdbeta2_NW(ii, jj) = term;
 
                 % Gauss newton
                 term13 = integral_robin_P2(node, elem, bdFlag, ...
-                                           [us3(IUxBot), us3(IUyBot)], ...
-                                           [um(IUxBot), um(IUyBot)], ...
-                                           [m2, m2], option);
-                d2Xidm2_GN(ii, jj) = term13;
+                                           [v_gn(IUxBot), v_gn(IUyBot)], ...
+                                           [ubeta(IUxBot), ubeta(IUyBot)], ...
+                                           [beta2, beta2], option);
+                d2Jdbeta2_GN(ii, jj) = term13;
 
                 deps =  mp('1e-5');
 
                 if true
                     % compare to FD
-                    % um00 = poisson_robin2D_mpfr(x, F0(:), gtop, gbot, m - m1*deps - m2*deps);
-                    % um01 = poisson_robin2D_mpfr(x, F0(:), gtop, gbot, m - m1*deps + m2*deps);
-                    % um10 = poisson_robin2D_mpfr(x, F0(:), gtop, gbot, m + m1*deps - m2*deps);
-                    % um11 = poisson_robin2D_mpfr(x, F0(:), gtop, gbot, m + m1*deps + m2*deps);
+                    % um00 = poisson_robin2D_mpfr(x, F0(:), gtop, gbot, beta - beta1*deps - beta2*deps);
+                    % um01 = poisson_robin2D_mpfr(x, F0(:), gtop, gbot, beta - beta1*deps + beta2*deps);
+                    % um10 = poisson_robin2D_mpfr(x, F0(:), gtop, gbot, beta + beta1*deps - beta2*deps);
+                    % um11 = poisson_robin2D_mpfr(x, F0(:), gtop, gbot, beta + beta1*deps + beta2*deps);
 
                     pde_test = pde;
-                    pde_test.g_R = linearize_bot(m - m1*deps - m2 *deps);
+                    pde_test.g_R = linearize_bot(beta - beta1*deps - beta2 *deps);
                     [soln,eqn,info] = StokesP2P1_periodic(node,elem,bdFlag,pde_test,option);
                     um00 = soln.u;
 
-                    pde_test.g_R = linearize_bot(m - m1*deps + m2 *deps);
+                    pde_test.g_R = linearize_bot(beta - beta1*deps + beta2 *deps);
                     [soln,eqn,info] = StokesP2P1_periodic(node,elem,bdFlag,pde_test,option);
                     um01 = soln.u;
 
-                    pde_test.g_R = linearize_bot(m + m1*deps - m2 *deps);
+                    pde_test.g_R = linearize_bot(beta + beta1*deps - beta2 *deps);
                     [soln,eqn,info] = StokesP2P1_periodic(node,elem,bdFlag,pde_test,option);
                     um10 = soln.u;
 
-                    pde_test.g_R = linearize_bot(m + m1*deps + m2 *deps);
+                    pde_test.g_R = linearize_bot(beta + beta1*deps + beta2 *deps);
                     [soln,eqn,info] = StokesP2P1_periodic(node,elem,bdFlag,pde_test,option);
                     um11 = soln.u;
                     
-                    % d2Xidm2_FD(ii, jj) = sum( (um11(I)-u_obs).^2 ...
+                    % d2Jdbeta2_FD(ii, jj) = sum( (um11(I)-u_obs).^2 ...
                     %                           - (um10(I)-u_obs).^2  ...
                     %                           - (um01(I)-u_obs).^2 ...
                     %                           + (um00(I)-u_obs).^2 ) *h / deps/deps/2/2;
-                    d2Xidm2_FD(ii, jj) =  (integral_neumann_P2(node, elem, bdFlag, linearize_top(um11(IUxTop)-u_obs(:,1)), 'repeat', [], option)...
+                    d2Jdbeta2_FD(ii, jj) =  (integral_neumann_P2(node, elem, bdFlag, linearize_top(um11(IUxTop)-u_obs(:,1)), 'repeat', [], option)...
                                            - integral_neumann_P2(node, elem, bdFlag, linearize_top(um10(IUxTop)-u_obs(:,1)), 'repeat', [], option)...
                                            - integral_neumann_P2(node, elem, bdFlag, linearize_top(um01(IUxTop)-u_obs(:,1)), 'repeat', [], option)...
                                            + integral_neumann_P2(node, elem, bdFlag, linearize_top(um00(IUxTop)-u_obs(:,1)), 'repeat', [], option))...
@@ -651,21 +652,21 @@ for k = 1 : max_iteration
                 
             end
 
-            % um1 = poisson_robin2D_mpfr(x, F0(:), gtop, gbot, m - m1*deps);
-            % um2 = poisson_robin2D_mpfr(x, F0(:), gtop, gbot, m + m1*deps);
+            % um1 = poisson_robin2D_mpfr(x, F0(:), gtop, gbot, beta - beta1*deps);
+            % um2 = poisson_robin2D_mpfr(x, F0(:), gtop, gbot, beta + beta1*deps);
             
             deps = 1e-6;
 
             pde_test = pde;
-            pde_test.g_R = linearize_bot(m - m1*deps); 
+            pde_test.g_R = linearize_bot(beta - beta1*deps); 
             [soln,eqn,info] = StokesP2P1_periodic(node,elem,bdFlag,pde_test,option);
             um1 = soln.u;
 
-            pde_test.g_R = linearize_bot(m + m1*deps); 
+            pde_test.g_R = linearize_bot(beta + beta1*deps); 
             [soln,eqn,info] = StokesP2P1_periodic(node,elem,bdFlag,pde_test,option);
             um2 = soln.u;
             
-            dXidm_FD(ii) = (integral_neumann_P2(node, elem, bdFlag, linearize_top(um2(IUxTop)-u_obs(:,1)), 'repeat', [], option)...
+            dJdbeta_FD(ii) = (integral_neumann_P2(node, elem, bdFlag, linearize_top(um2(IUxTop)-u_obs(:,1)), 'repeat', [], option)...
                             - integral_neumann_P2(node, elem, bdFlag, linearize_top(um1(IUxTop)-u_obs(:,1)), 'repeat', [], option))  / 2/deps;
         end
 
@@ -675,9 +676,9 @@ for k = 1 : max_iteration
         get_robin_stab_mat;
         
         
-        fprintf('res NW: %e\n', norm(d2Xidm2_NW * (m(1:Nm) - m0(1:Nm)) - dXidm(:)) / norm(dXidm));
-        fprintf('res GN: %e\n', norm(d2Xidm2_GN * (m(1:Nm) - m0(1:Nm)) - dXidm(:)) / norm(dXidm));
-        fprintf('res FD : %e\n', norm(d2Xidm2_FD * (m(1:Nm) - m0(1:Nm)) - dXidm_FD) / norm(dXidm_FD));
+        fprintf('res NW: %e\n', norm(d2Jdbeta2_NW * (beta(1:Nbeta) - beta0(1:Nbeta)) - dJdbeta(:)) / norm(dJdbeta));
+        fprintf('res GN: %e\n', norm(d2Jdbeta2_GN * (beta(1:Nbeta) - beta0(1:Nbeta)) - dJdbeta(:)) / norm(dJdbeta));
+        fprintf('res FD : %e\n', norm(d2Jdbeta2_FD * (beta(1:Nbeta) - beta0(1:Nbeta)) - dJdbeta_FD) / norm(dJdbeta_FD));
         
         %dbgHes;
         dbgDm;
@@ -689,30 +690,30 @@ for k = 1 : max_iteration
         % Use Adjoint, with CG
         % 
         % --------------------------------------------------------------------------------
-        dXidm = zeros(Nm,1);
+        dJdbeta = zeros(Nbeta,1);
 
         % 
         % Primary adj: 
-        %    (dLdu)^t u^s = - dXidu^t 
+        %    (dLdu)^t u^s = - dJdu^t 
         % 
-        dXidu = two * [um(IUxTop) - u_obs(:,1), xtop*0];
+        dJdu = two * [ubeta(IUxTop) - u_obs(:,1), xtop*0];
         pde_adj = pde;
         pde_adj.f = 0;
         pde_adj.fp = 0;
-        pde_adj.g_N = -[linearize_top(dXidu(:,1)), xtop*0];
-        pde_adj.g_R = linearize_bot(m);
+        pde_adj.g_N = -[linearize_top(dJdu(:,1)), xtop*0];
+        pde_adj.g_R = linearize_bot(beta);
         pde_adj.g_RN = [xbot*0, xbot*0];
         pde_adj.g_Dn = [xbot*0, xbot*0];
         [soln,eqn,info] = StokesP2P1_periodic(node,elem,bdFlag,pde_adj,option);
-        us1 = soln.u;
+        v_adj = soln.u;
         
-        dLdm = [um(IUxBot) um(IUyBot)];
-        for ii = 1:Nm
-            m1 = extend_mid(EI(:, ii));
-            dXidm(ii) = integral_robin_P2(node, elem, bdFlag, ...
-                                          [us1(IUxBot) us1(IUyBot)], ...
-                                          dLdm, ...
-                                          [m1, m1], ...
+        dLdbeta = [ubeta(IUxBot) ubeta(IUyBot)];
+        for ii = 1:Nbeta
+            beta1 = extend_mid(EI(:, ii));
+            dJdbeta(ii) = integral_robin_P2(node, elem, bdFlag, ...
+                                          [v_adj(IUxBot) v_adj(IUyBot)], ...
+                                          dLdbeta, ...
+                                          [beta1, beta1], ...
                                           option);
         end
 
@@ -734,31 +735,31 @@ for k = 1 : max_iteration
         stokes_info.Mstab = Mstab;
         stokes_info.gamma_stab = gamma_stab;
 
-        %dXidm_stab = dXidm + gamma_stab * Mstab * m(1:n1);
-        dXidm_stab = dXidm;
+        %dJdbeta_stab = dJdbeta + gamma_stab * Mstab * beta(1:n1);
+        dJdbeta_stab = dJdbeta;
 
         
-        EI = eye(Nm);
+        EI = eye(Nbeta);
         if true
             % iterative
-            [dm, flg, relres, niter, resvec] = cgs(@(m1) stokes_hessian(node, elem, stokes_info, bdFlag, m, um, us1, m1, option), ...
-                                                   dXidm_stab(:), 1e-10, 50);
+            [dbeta, flg, relres, niter, resvec] = cgs(@(beta1) stokes_hessian(node, elem, stokes_info, bdFlag, beta, ubeta, v_adj, beta1, option), ...
+                                                   dJdbeta_stab(:), 1e-10, 50);
             fprintf('\tniter: %d, relres: %e\n', niter, relres);
             %resvec
             % relres
         else
             % inverse
-            d2Xidm2 = zeros(Nm);
-            for i = 1:Nm
-                d2Xidm2(:, i) = stokes_hessian(node, elem, stokes_info, bdFlag, m, um, us1, extend_mid(EI(:,i)), option);
+            d2Jdbeta2 = zeros(Nbeta);
+            for i = 1:Nbeta
+                d2Jdbeta2(:, i) = stokes_hessian(node, elem, stokes_info, bdFlag, beta, ubeta, v_adj, extend_mid(EI(:,i)), option);
             end
-            dm = d2Xidm2 \ dXidm_stab(:);
+            dbeta = d2Jdbeta2 \ dJdbeta_stab(:);
         end
 
         if 0
-            dXidm(:)
-            d2Xidm2
-            dm
+            dJdbeta(:)
+            d2Jdbeta2
+            dbeta
             error('funcH stop');
         end
         
@@ -767,23 +768,23 @@ for k = 1 : max_iteration
 
     % if k == 1
     %     subplot(4,1,1)
-    %     plot([sft(xbot); sft(xbot)+1], [sft(extend_mid(m0)); sft(extend_mid(m0))], '-rx', ...
-    %          [sft(xbot); sft(xbot)+1], [sft(extend_mid(m)); sft(extend_mid(m))], '-bx');
-    %     legend('m0', 'm');
-    %     title('m0');
+    %     plot([sft(xbot); sft(xbot)+1], [sft(extend_mid(beta0)); sft(extend_mid(beta0))], '-rx', ...
+    %          [sft(xbot); sft(xbot)+1], [sft(extend_mid(beta)); sft(extend_mid(beta))], '-bx');
+    %     legend('beta0', 'beta');
+    %     title('beta0');
     % end
     if k <= 4
         subplot(4,1,k)
-        plot([xbot(1:n1); xbot(1:n1)+1], [dm; dm], '-bo', ...
-             [sft(xbot); sft(xbot)+1], [sft(extend_mid(m-m0)); sft(extend_mid(m-m0))], '-rx');
-        legend('delta m', 'm-m0');
+        plot([xbot(1:n1); xbot(1:n1)+1], [dbeta; dbeta], '-bo', ...
+             [sft(xbot); sft(xbot)+1], [sft(extend_mid(beta-beta0)); sft(extend_mid(beta-beta0))], '-rx');
+        legend('delta beta', 'beta-beta0');
         s = sprintf('iter :%d', k);
         title(s);
     end
 
-    % update m
-    mbefore = m;
-    m = mbefore - extend_mid(dm);
+    % update beta
+    betabefore = beta;
+    beta = betabefore - extend_mid(dbeta);
     
 end
 

@@ -5,10 +5,10 @@
 
 文档中把反演程序里反复出现的四个问题分开写清楚：
 
-1. 正问题：给定当前 Robin 系数 $m$，求状态 $(\boldsymbol u,p)$。
-2. 增量正问题：给定参数方向 $\delta m$，求状态方向 $(\tilde{\boldsymbol u},\tilde p)$。
-3. 一次伴随问题：由目标函数的一阶状态导数驱动，求 $(\boldsymbol u^*,p^*)$。
-4. Gauss--Newton 增量伴随问题：由增量状态的顶部观测导数驱动，求 $(\tilde{\boldsymbol u}^*,\tilde p^*)$。
+1. 正问题：给定当前 Robin 系数 $\beta$，求状态 $(\boldsymbol u,p)$。
+2. 增量正问题：给定参数方向 $\delta \beta$，求状态方向 $(\tilde{\boldsymbol u},\tilde p)$。
+3. 一次伴随问题：由目标函数的一阶状态导数驱动，求 $(\boldsymbol v,r)$。
+4. Gauss--Newton 增量伴随问题：由增量状态的顶部观测导数驱动，求 $(\tilde{\boldsymbol v},\tilde r)$。
 
 为突出四个问题的差别，下面只把变化的源项标成红色。
 
@@ -39,31 +39,31 @@ $$
 \frac{\partial\boldsymbol u}{\partial n}-p\boldsymbol n
 \right)
 +
-m\boldsymbol u_t
+\beta\boldsymbol u_t
 =\boldsymbol g_R
 \qquad\text{on }\Gamma_b.
 $$
 
-其中 $\boldsymbol T$ 是切向投影，$\boldsymbol u_t=\boldsymbol T\boldsymbol u$。程序内部通过旋转底部自由度实现滑移条件：`pde.g_Dn` 约束法向速度，`pde.g_R` 给出 Robin 系数 $m$，`pde.g_RN` 给出 Robin 边界右端 $\boldsymbol g_R$。
+其中 $\boldsymbol T$ 是切向投影，$\boldsymbol u_t=\boldsymbol T\boldsymbol u$。程序内部通过旋转底部自由度实现滑移条件：`pde.g_Dn` 约束法向速度，`pde.g_R` 给出 Robin 系数 $\beta$，`pde.g_RN` 给出 Robin 边界右端 $\boldsymbol g_R$。
 
-在 `stokes_inversion.m` 中，真实参数记为 `m0`，当前反演参数记为 `m`。程序先用 `m0` 解一次正问题，把顶部速度作为观测：
+在 `stokes_inversion.m` 中，真实参数记为 `beta0`，当前反演参数记为 `beta`。程序先用 `beta0` 解一次正问题，把顶部速度作为观测：
 
 $$
 \boldsymbol u_{\rm obs}
 =
-\boldsymbol u(m_0)|_{\Gamma_t}.
+\boldsymbol u(\beta_0)|_{\Gamma_t}.
 $$
 
-之后每次迭代给定当前 $m$，解正问题得到 $\boldsymbol u(m)$。目标函数只使用顶部水平速度：
+之后每次迭代给定当前 $\beta$，解正问题得到 $\boldsymbol u(\beta)$。目标函数只使用顶部水平速度：
 
 ```matlab
-dXidu = two*([um(IUxTop) - u_obs(:,1), xtop*0]);
+dJdu = two*([ubeta(IUxTop) - u_obs(:,1), xtop*0]);
 ```
 
 对应
 
 $$
-\Xi(m)
+J(\beta)
 =
 \int_{\Gamma_t}
 (u_x-u_{{\rm obs},x})^2\,ds.
@@ -72,17 +72,17 @@ $$
 这里没有 $\frac12$，因此一阶状态变分是
 
 $$
-\delta\Xi(\boldsymbol u)[\boldsymbol w]
+\delta J(\boldsymbol u)[\boldsymbol w]
 =
 \int_{\Gamma_t}
 2(u_x-u_{{\rm obs},x})w_x\,ds.
 $$
 
-这就是程序中 `dXidu` 前面出现 `two` 的原因。
+这就是程序中 `dJdu` 前面出现 `two` 的原因。
 
 ## 2. 问题一：正问题
 
-给定当前参数 $m$，正问题求 $(\boldsymbol u,p)$：
+给定当前参数 $\beta$，正问题求 $(\boldsymbol u,p)$：
 
 $$
 \left\{
@@ -103,7 +103,7 @@ $$
 \left(
 \frac{\partial\boldsymbol u}{\partial n}-p\boldsymbol n
 \right)
-+m\boldsymbol u_t
++\beta\boldsymbol u_t
 &=\color{red}{\boldsymbol g_R}
 &&\text{on }\Gamma_b,\\
 \boldsymbol u,\quad
@@ -114,7 +114,7 @@ $$
 \right.
 $$
 
-程序中先用 `m0` 生成观测，再用当前 `m` 求反演状态：
+程序中先用 `beta0` 生成观测，再用当前 `beta` 求反演状态：
 
 ```matlab
 pde.g_N  = linearize_top(pde.g_N);
@@ -131,24 +131,24 @@ u_obs = [uh(IUxTop), uh(IUyTop)];
 
 ```matlab
 pde_test = pde;
-pde_test.g_R = m;
+pde_test.g_R = beta;
 [soln,eqn,info] = StokesP2P1_periodic(node,elem,bdFlag,pde_test,option);
-um = soln.u;
+ubeta = soln.u;
 ```
 
-这里 `um` 对应 $\boldsymbol u(m)$。
+这里 `ubeta` 对应 $\boldsymbol u(\beta)$。
 
 ## 3. 问题二：增量正问题
 
-设参数方向为 $\delta m$，由它引起的状态方向为 $(\tilde{\boldsymbol u},\tilde p)$。线性 Stokes 的体内算子不依赖状态，所以增量方程的体内源项为零；唯一非零源项来自底部 Robin 项
+设参数方向为 $\delta \beta$，由它引起的状态方向为 $(\tilde{\boldsymbol u},\tilde p)$。线性 Stokes 的体内算子不依赖状态，所以增量方程的体内源项为零；唯一非零源项来自底部 Robin 项
 
 $$
-m\boldsymbol u_t
+\beta\boldsymbol u_t
 \quad\Longrightarrow\quad
-m\tilde{\boldsymbol u}_t+\delta m\,\boldsymbol u_t.
+\beta\tilde{\boldsymbol u}_t+\delta\beta\,\boldsymbol u_t.
 $$
 
-把 $\delta m\,\boldsymbol u_t$ 移到右端，得到增量正问题：
+把 $\delta\beta\,\boldsymbol u_t$ 移到右端，得到增量正问题：
 
 $$
 \left\{
@@ -171,8 +171,8 @@ $$
 \frac{\partial\tilde{\boldsymbol u}}{\partial n}
 -\tilde p\boldsymbol n
 \right)
-+m\tilde{\boldsymbol u}_t
-&=\color{red}{-\delta m\,\boldsymbol u_t}
++\beta\tilde{\boldsymbol u}_t
+&=\color{red}{-\delta\beta\,\boldsymbol u_t}
 &&\text{on }\Gamma_b,\\
 \tilde{\boldsymbol u},\quad
 \left(\frac{\partial\tilde{\boldsymbol u}}{\partial n}
@@ -189,25 +189,25 @@ $$
 pde_du.f = 0;
 pde_du.fp = 0;
 pde_du.g_N = [xtop*0, xtop*0];
-pde_du.g_R = linearize_bot(m);
-pde_du.g_RN = [-um(IUxBot), m1, -um(IUyBot), m1];
+pde_du.g_R = linearize_bot(beta);
+pde_du.g_RN = [-ubeta(IUxBot), beta1, -ubeta(IUyBot), beta1];
 pde_du.g_Dn = [xbot*0, xbot*0];
 [soln,eqn,info] = StokesP2P1_periodic(node,elem,bdFlag,pde_du,option);
 du1 = soln.u;
 ```
 
-`m1` 是离散方向 $\delta m$。`g_RN` 有四列时，solver 把第 1、2 列相乘作为 $x$ 分量，把第 3、4 列相乘作为 $y$ 分量，因此
+`beta1` 是离散方向 $\delta \beta$。`g_RN` 有四列时，solver 把第 1、2 列相乘作为 $x$ 分量，把第 3、4 列相乘作为 $y$ 分量，因此
 
 $$
-[-u_x,m_1,-u_y,m_1]
+[-u_x,\beta_1,-u_y,\beta_1]
 \quad\Longleftrightarrow\quad
 \boldsymbol g_R^{\rm inc}
 =
--\delta m\,\boldsymbol u
+-\delta\beta\,\boldsymbol u
 \quad\text{on }\Gamma_b.
 $$
 
-底部法向速度由 `g_Dn=0` 约束，所以这个向量源项在滑移实现中等价于切向右端 $-\delta m\,\boldsymbol u_t$。
+底部法向速度由 `g_Dn=0` 约束，所以这个向量源项在滑移实现中等价于切向右端 $-\delta\beta\,\boldsymbol u_t$。
 
 ## 4. 伴随推导中的配对
 
@@ -262,7 +262,7 @@ $$
 一次伴随问题用来消去目标函数一阶变分中的未知状态方向：
 
 $$
-\delta\Xi(\boldsymbol u)[\tilde{\boldsymbol u}]
+\delta J(\boldsymbol u)[\tilde{\boldsymbol u}]
 =
 \int_{\Gamma_t}
 2(u_x-u_{{\rm obs},x})\tilde u_x\,ds.
@@ -273,50 +273,50 @@ $$
 $$
 \int_{\Gamma_t}
 \left(
-\frac{\partial\boldsymbol u^*}{\partial n}
--p^*\boldsymbol n
+\frac{\partial\boldsymbol v}{\partial n}
+-r\boldsymbol n
 \right)\cdot\tilde{\boldsymbol u}\,ds.
 $$
 
-为了抵消 $\delta\Xi(\boldsymbol u)[\tilde{\boldsymbol u}]$，取一次伴随顶部牵引为
+为了抵消 $\delta J(\boldsymbol u)[\tilde{\boldsymbol u}]$，取一次伴随顶部牵引为
 
 $$
-\frac{\partial\boldsymbol u^*}{\partial n}
--p^*\boldsymbol n
+\frac{\partial\boldsymbol v}{\partial n}
+-r\boldsymbol n
 =
 \color{red}{-2(u_x-u_{{\rm obs},x})\boldsymbol e_x}
 \qquad\text{on }\Gamma_t.
 $$
 
-完整的一次伴随问题为求 $(\boldsymbol u^*,p^*)$：
+完整的一次伴随问题为求 $(\boldsymbol v,r)$：
 
 $$
 \left\{
 \begin{aligned}
--\nabla\cdot(\nabla\boldsymbol u^*)+\nabla p^*
+-\nabla\cdot(\nabla\boldsymbol v)+\nabla r
 &=\color{red}{\boldsymbol 0}
 &&\text{in }\Omega,\\
--\nabla\cdot\boldsymbol u^*
+-\nabla\cdot\boldsymbol v
 &=\color{red}{0}
 &&\text{in }\Omega,\\
-\frac{\partial\boldsymbol u^*}{\partial n}
--p^*\boldsymbol n
+\frac{\partial\boldsymbol v}{\partial n}
+-r\boldsymbol n
 &=\color{red}{-2(u_x-u_{{\rm obs},x})\boldsymbol e_x}
 &&\text{on }\Gamma_t,\\
-\boldsymbol u^*\cdot\boldsymbol n
+\boldsymbol v\cdot\boldsymbol n
 &=\color{red}{0}
 &&\text{on }\Gamma_b,\\
 \boldsymbol T
 \left(
-\frac{\partial\boldsymbol u^*}{\partial n}
--p^*\boldsymbol n
+\frac{\partial\boldsymbol v}{\partial n}
+-r\boldsymbol n
 \right)
-+m\boldsymbol u^*_t
++\beta\boldsymbol v_t
 &=\color{red}{\boldsymbol 0}
 &&\text{on }\Gamma_b,\\
-\boldsymbol u^*,\quad
-\left(\frac{\partial\boldsymbol u^*}{\partial n}
--p^*\boldsymbol n\right)
+\boldsymbol v,\quad
+\left(\frac{\partial\boldsymbol v}{\partial n}
+-r\boldsymbol n\right)
 &\text{ periodic}
 &&\text{on }\Gamma_p.
 \end{aligned}
@@ -326,19 +326,19 @@ $$
 程序中对应为：
 
 ```matlab
-dXidu = two * [um(IUxTop) - u_obs(:,1), xtop*0];
+dJdu = two * [ubeta(IUxTop) - u_obs(:,1), xtop*0];
 pde_adj = pde;
 pde_adj.f = 0;
 pde_adj.fp = 0;
-pde_adj.g_N = -[linearize_top(dXidu(:,1)), xtop*0];
-pde_adj.g_R = linearize_bot(m);
+pde_adj.g_N = -[linearize_top(dJdu(:,1)), xtop*0];
+pde_adj.g_R = linearize_bot(beta);
 pde_adj.g_RN = [xbot*0, xbot*0];
 pde_adj.g_Dn = [xbot*0, xbot*0];
 [soln,eqn,info] = StokesP2P1_periodic(node,elem,bdFlag,pde_adj,option);
-us1 = soln.u;
+v_adj = soln.u;
 ```
 
-`us1` 或前面代码里的 `ustar` 就是离散伴随速度 $\boldsymbol u^*$。
+`v_adj` 或前面代码里的 `v_adj` 就是离散伴随速度 $\boldsymbol v$。
 
 ## 6. 一阶梯度公式
 
@@ -349,12 +349,12 @@ $$
 \left(
 \frac{\partial\tilde{\boldsymbol u}}{\partial n}
 -\tilde p\boldsymbol n
-\right)\cdot\boldsymbol u^*\,ds
+\right)\cdot\boldsymbol v\,ds
 +
 \int_{\Gamma_b}
 \left(
-\frac{\partial\boldsymbol u^*}{\partial n}
--p^*\boldsymbol n
+\frac{\partial\boldsymbol v}{\partial n}
+-r\boldsymbol n
 \right)\cdot\tilde{\boldsymbol u}\,ds.
 $$
 
@@ -367,7 +367,7 @@ $$
 -\tilde p\boldsymbol n
 \right)
 =
--m\tilde{\boldsymbol u}_t-\delta m\,\boldsymbol u_t
+-\beta\tilde{\boldsymbol u}_t-\delta\beta\,\boldsymbol u_t
 $$
 
 和伴随 Robin 条件
@@ -375,43 +375,43 @@ $$
 $$
 \boldsymbol T
 \left(
-\frac{\partial\boldsymbol u^*}{\partial n}
--p^*\boldsymbol n
+\frac{\partial\boldsymbol v}{\partial n}
+-r\boldsymbol n
 \right)
 =
--m\boldsymbol u^*_t
+-\beta\boldsymbol v_t
 $$
 
 代入，含 $\tilde{\boldsymbol u}_t$ 的项相消，剩下
 
 $$
-\delta\Xi(m)[\delta m]
+\delta J(\beta)[\delta\beta]
 =
 \int_{\Gamma_b}
-\delta m\,
-\boldsymbol u_t\cdot\boldsymbol u^*_t
+\delta\beta\,
+\boldsymbol u_t\cdot\boldsymbol v_t
 \,ds.
 $$
 
 所以相对于底部 $L^2$ 配对，梯度密度为
 
 $$
-g_m
+g_\beta
 =
-\boldsymbol u_t\cdot\boldsymbol u^*_t
+\boldsymbol u_t\cdot\boldsymbol v_t
 \qquad\text{on }\Gamma_b.
 $$
 
 程序用每个底部参数基函数 $\phi_i$ 测试这个梯度：
 
 ```matlab
-dLdm = [um(IUxBot) um(IUyBot)];
-for ii = 1:Nm
-    m1 = extend_mid(EI(:, ii));
-    dXidm(ii) = integral_robin_P2(node, elem, bdFlag, ...
-                                  [us1(IUxBot) us1(IUyBot)], ...
-                                  dLdm, ...
-                                  [m1, m1], ...
+dLdbeta = [ubeta(IUxBot) ubeta(IUyBot)];
+for ii = 1:Nbeta
+    beta1 = extend_mid(EI(:, ii));
+    dJdbeta(ii) = integral_robin_P2(node, elem, bdFlag, ...
+                                  [v_adj(IUxBot) v_adj(IUyBot)], ...
+                                  dLdbeta, ...
+                                  [beta1, beta1], ...
                                   option);
 end
 ```
@@ -419,35 +419,35 @@ end
 对应
 
 $$
-({\rm dXidm})_i
+({\rm dJdbeta})_i
 =
 \int_{\Gamma_b}
 \phi_i\,
-\boldsymbol u_t\cdot\boldsymbol u^*_t
+\boldsymbol u_t\cdot\boldsymbol v_t
 \,ds.
 $$
 
-`integral_robin_P2` 在 Robin 边界上做 P2 边界积分。第三个函数参数 `[m1,m1]` 表示同一个参数基函数同时乘到速度两个分量上；在滑移实现中，底部法向分量已由 `g_Dn=0` 约束，所以该内积等价于切向内积。
+`integral_robin_P2` 在 Robin 边界上做 P2 边界积分。第三个函数参数 `[beta1,beta1]` 表示同一个参数基函数同时乘到速度两个分量上；在滑移实现中，底部法向分量已由 `g_Dn=0` 约束，所以该内积等价于切向内积。
 
 ## 7. 有限差分验证
 
 程序随后用中心差分验证伴随梯度：
 
 ```matlab
-pde_test.g_R = m + ei*deps;
+pde_test.g_R = beta + ei*deps;
 ...
-pde_test.g_R = m - ei*deps;
+pde_test.g_R = beta - ei*deps;
 ...
-dXidm_FD(i) = (Xi(m+eps ei)-Xi(m-eps ei))/(2 eps);
+dJdbeta_FD(i) = (J(beta+eps ei)-J(beta-eps ei))/(2 eps);
 ```
 
-代码里 `Xi` 通过顶部积分计算：
+代码里 `J` 通过顶部积分计算：
 
 $$
-\Xi(m)
+J(\beta)
 =
 \int_{\Gamma_t}
-(u_x(m)-u_{{\rm obs},x})^2\,ds.
+(u_x(\beta)-u_{{\rm obs},x})^2\,ds.
 $$
 
 这部分不参与反演更新，只用于检查伴随梯度符号和大小。
@@ -457,18 +457,18 @@ $$
 在 `scheme == 6` 中，程序用 CGS 求近似 Newton 步：
 
 ```matlab
-[dm, flg, relres, niter, resvec] = cgs(@(m1) stokes_hessian(..., m1, option), ...
-                                       dXidm_stab(:), 1e-10, 50);
+[dbeta, flg, relres, niter, resvec] = cgs(@(beta1) stokes_hessian(..., beta1, option), ...
+                                       dJdbeta_stab(:), 1e-10, 50);
 ```
 
-其中 `stokes_hessian.m` 实现的是 Gauss--Newton Hessian 对方向 $\delta m$ 的作用。给定 $\delta m$，第一步仍是第 3 节的增量正问题，得到 `du1`：
+其中 `stokes_hessian.m` 实现的是 Gauss--Newton Hessian 对方向 $\delta \beta$ 的作用。给定 $\delta \beta$，第一步仍是第 3 节的增量正问题，得到 `du1`：
 
 ```matlab
 pde_du.f = 0;
 pde_du.fp = 0;
 pde_du.g_N = [xtop*0, xtop*0];
-pde_du.g_R = linearize_bot(m);
-pde_du.g_RN = [-um(IUxBot), m1, -um(IUyBot), m1];
+pde_du.g_R = linearize_bot(beta);
+pde_du.g_RN = [-ubeta(IUxBot), beta1, -ubeta(IUyBot), beta1];
 pde_du.g_Dn = [xbot*0, xbot*0];
 [soln,eqn,info] = StokesP2P1_periodic(node,elem,bdFlag,pde_du,option);
 du1 = soln.u;
@@ -477,42 +477,42 @@ du1 = soln.u;
 Gauss--Newton 只保留观测残差的线性化平方项。目标函数二阶状态变分在顶部给出
 
 $$
-\delta^2\Xi(\boldsymbol u)
+\delta^2J(\boldsymbol u)
 [\tilde{\boldsymbol u},\boldsymbol w]
 =
 \int_{\Gamma_t}
 2\tilde u_x w_x\,ds.
 $$
 
-因此增量伴随问题的顶部源项是 $-2\tilde u_x\boldsymbol e_x$，底部 Robin 右端保持零。求 $(\tilde{\boldsymbol u}^*,\tilde p^*)$：
+因此增量伴随问题的顶部源项是 $-2\tilde u_x\boldsymbol e_x$，底部 Robin 右端保持零。求 $(\tilde{\boldsymbol v},\tilde r)$：
 
 $$
 \left\{
 \begin{aligned}
--\nabla\cdot(\nabla\tilde{\boldsymbol u}^*)+\nabla\tilde p^*
+-\nabla\cdot(\nabla\tilde{\boldsymbol v})+\nabla\tilde r
 &=\color{red}{\boldsymbol 0}
 &&\text{in }\Omega,\\
--\nabla\cdot\tilde{\boldsymbol u}^*
+-\nabla\cdot\tilde{\boldsymbol v}
 &=\color{red}{0}
 &&\text{in }\Omega,\\
-\frac{\partial\tilde{\boldsymbol u}^*}{\partial n}
--\tilde p^*\boldsymbol n
+\frac{\partial\tilde{\boldsymbol v}}{\partial n}
+-\tilde r\boldsymbol n
 &=\color{red}{-2\tilde u_x\boldsymbol e_x}
 &&\text{on }\Gamma_t,\\
-\tilde{\boldsymbol u}^*\cdot\boldsymbol n
+\tilde{\boldsymbol v}\cdot\boldsymbol n
 &=\color{red}{0}
 &&\text{on }\Gamma_b,\\
 \boldsymbol T
 \left(
-\frac{\partial\tilde{\boldsymbol u}^*}{\partial n}
--\tilde p^*\boldsymbol n
+\frac{\partial\tilde{\boldsymbol v}}{\partial n}
+-\tilde r\boldsymbol n
 \right)
-+m\tilde{\boldsymbol u}^*_t
++\beta\tilde{\boldsymbol v}_t
 &=\color{red}{\boldsymbol 0}
 &&\text{on }\Gamma_b,\\
-\tilde{\boldsymbol u}^*,\quad
-\left(\frac{\partial\tilde{\boldsymbol u}^*}{\partial n}
--\tilde p^*\boldsymbol n\right)
+\tilde{\boldsymbol v},\quad
+\left(\frac{\partial\tilde{\boldsymbol v}}{\partial n}
+-\tilde r\boldsymbol n\right)
 &\text{ periodic}
 &&\text{on }\Gamma_p.
 \end{aligned}
@@ -525,55 +525,55 @@ $$
 pde_adj3.f = 0;
 pde_adj3.fp = 0;
 pde_adj3.g_N = - [2 * linearize_top(du1(IUxTop)), xtop*0];
-pde_adj3.g_R = linearize_bot(m);
+pde_adj3.g_R = linearize_bot(beta);
 pde_adj3.g_RN = [xbot*0, xbot*0];
 pde_adj3.g_Dn = [xbot*0, xbot*0];
 [soln,eqn,info] = StokesP2P1_periodic(node,elem,bdFlag,pde_adj3,option);
-us3 = soln.u;
+v_gn = soln.u;
 ```
 
-这里 `us3` 是 Gauss--Newton 增量伴随速度 $\tilde{\boldsymbol u}^*$。然后程序计算
+这里 `v_gn` 是 Gauss--Newton 增量伴随速度 $\tilde{\boldsymbol v}$。然后程序计算
 
 ```matlab
 term = integral_robin_P2(node, elem, bdFlag, ...
-                         [us3(IUxBot), us3(IUyBot)], ...
-                         [um(IUxBot), um(IUyBot)], ...
-                         [m2, m2], option);
-Hdm(i) = term;
+                         [v_gn(IUxBot), v_gn(IUyBot)], ...
+                         [ubeta(IUxBot), ubeta(IUyBot)], ...
+                         [beta2, beta2], option);
+Hdbeta(i) = term;
 ```
 
 对应
 
 $$
-(H_{\rm GN}\delta m)_i
+(H_{\rm GN}\delta\beta)_i
 =
 \int_{\Gamma_b}
 \phi_i\,
-\boldsymbol u_t\cdot\tilde{\boldsymbol u}^*_t
+\boldsymbol u_t\cdot\tilde{\boldsymbol v}_t
 \,ds.
 $$
 
 程序最后还加了可选稳定化项：
 
 $$
-H_{\rm GN}\delta m
+H_{\rm GN}\delta\beta
 \leftarrow
-H_{\rm GN}\delta m
+H_{\rm GN}\delta\beta
 +
-\gamma_{\rm stab}M_{\rm stab}\delta m.
+\gamma_{\rm stab}M_{\rm stab}\delta\beta.
 $$
 
 对应代码：
 
 ```matlab
-Hdm = Hdm + stokes_info.gamma_stab * stokes_info.Mstab * m1(1:n1);
+Hdbeta = Hdbeta + stokes_info.gamma_stab * stokes_info.Mstab * beta1(1:n1);
 ```
 
 当前 `stokes_inversion.m` 中设置
 
 ```matlab
 gamma_stab = 1e-11;
-dXidm_stab = dXidm;
+dJdbeta_stab = dJdbeta;
 ```
 
 也就是说右端梯度没有加稳定化梯度，但 Hessian-vector product 中保留了很小的稳定化矩阵项。
@@ -585,20 +585,20 @@ dXidm_stab = dXidm;
 $$
 \boldsymbol T
 \left(
-\frac{\partial \boldsymbol u^*}{\partial n}
--p^*\boldsymbol n
+\frac{\partial \boldsymbol v}{\partial n}
+-r\boldsymbol n
 \right)
-+m\boldsymbol u^*_t
++\beta\boldsymbol v_t
 =0
 \quad\Longrightarrow\quad
 \boldsymbol T
 \left(
-\frac{\partial \tilde{\boldsymbol u}^{*,N}}{\partial n}
--\tilde p^{*,N}\boldsymbol n
+\frac{\partial \tilde{\boldsymbol v}^{N}}{\partial n}
+-\tilde r^{N}\boldsymbol n
 \right)
-+m\tilde{\boldsymbol u}^{*,N}_t
++\beta\tilde{\boldsymbol v}^{N}_t
 =
-\color{red}{-\delta m\,\boldsymbol u^*_t}.
+\color{red}{-\delta\beta\,\boldsymbol v_t}.
 $$
 
 程序中对应
@@ -607,61 +607,61 @@ $$
 pde_adj2.f = 0;
 pde_adj2.fp = 0;
 pde_adj2.g_N = - [two * linearize_top(du1(IUxTop)), xtop*0];
-pde_adj2.g_R = linearize_bot(m);
-pde_adj2.g_RN = - [(us1(IUxBot)), m1, (us1(IUyBot)), m1];
+pde_adj2.g_R = linearize_bot(beta);
+pde_adj2.g_RN = - [(v_adj(IUxBot)), beta1, (v_adj(IUyBot)), beta1];
 pde_adj2.g_Dn = [xbot*0, xbot*0];
 [soln,eqn,info] = StokesP2P1_periodic(node,elem,bdFlag,pde_adj2,option);
-us2 = soln.u;
+v_newton = soln.u;
 ```
 
-因此 `us2` 是完整 Newton 增量伴随，`us3` 是 Gauss--Newton 增量伴随。`scheme == 6` 和 `stokes_hessian.m` 使用的是 `us3`。
+因此 `v_newton` 是完整 Newton 增量伴随，`v_gn` 是 Gauss--Newton 增量伴随。`scheme == 6` 和 `stokes_hessian.m` 使用的是 `v_gn`。
 
 完整 Newton 测试中 Hessian 的两个主要项是
 
 $$
 \int_{\Gamma_b}
-\phi_j\,\boldsymbol u_t\cdot\boldsymbol u^{*,N}_{i,t}\,ds
+\phi_j\,\boldsymbol u_t\cdot\boldsymbol v^N_{i,t}\,ds
 +
 \int_{\Gamma_b}
-\phi_j\,\tilde{\boldsymbol u}_{i,t}\cdot\boldsymbol u^*_t\,ds.
+\phi_j\,\tilde{\boldsymbol u}_{i,t}\cdot\boldsymbol v_t\,ds.
 $$
 
 代码对应
 
 ```matlab
 term1 = integral_robin_P2(node, elem, bdFlag, ...
-                          [us2(IUxBot), us2(IUyBot)], ...
-                          [um(IUxBot), um(IUyBot)], ...
-                          [m2, m2], option);
+                          [v_newton(IUxBot), v_newton(IUyBot)], ...
+                          [ubeta(IUxBot), ubeta(IUyBot)], ...
+                          [beta2, beta2], option);
 
 term2 = integral_robin_P2(node, elem, bdFlag, ...
-                          [us1(IUxBot), us1(IUyBot)], ...
+                          [v_adj(IUxBot), v_adj(IUyBot)], ...
                           [du1(IUxBot), du1(IUyBot)], ...
-                          [m2, m2], option);
+                          [beta2, beta2], option);
 ```
 
 ## 10. 更新公式
 
-CGS 求得 `dm` 后，程序更新
+CGS 求得 `dbeta` 后，程序更新
 
 ```matlab
-m = mbefore - extend_mid(dm);
+beta = betabefore - extend_mid(dbeta);
 ```
 
 由于 CGS 解的是
 
 $$
-H_{\rm GN}\,dm
+H_{\rm GN}\,\delta\beta
 =
-\nabla\Xi(m),
+\nabla J(\beta),
 $$
 
 所以更新是
 
 $$
-m_{\rm new}
+\beta_{\rm new}
 =
-m-dm,
+\beta-\delta\beta,
 $$
 
 即沿 Gauss--Newton 下降方向更新 Robin 系数。
@@ -670,21 +670,21 @@ $$
 
 | 程序变量 | 理论对象 |
 | --- | --- |
-| `m0` | 真实 Robin 系数 $m_0$ |
-| `m` | 当前反演参数 $m$ |
-| `pde.g_R` | Robin 系数 $m$ |
+| `beta0` | 真实 Robin 系数 $\beta_0$ |
+| `beta` | 当前反演参数 $\beta$ |
+| `pde.g_R` | Robin 系数 $\beta$ |
 | `pde.g_RN` | Robin 边界右端 $\boldsymbol g_R$ |
 | `pde.g_Dn` | 底部法向速度约束，滑移时通常取零 |
-| `um` | 当前正问题速度 $\boldsymbol u(m)$ |
-| `u_obs` | 顶部观测速度 $\boldsymbol u(m_0)|_{\Gamma_t}$ |
-| `dXidu` | 目标函数对状态的导数 $2(u_x-u_{{\rm obs},x})\boldsymbol e_x$ |
-| `ustar` / `us1` | 一次伴随速度 $\boldsymbol u^*$ |
-| `dXidm` | 梯度 $\boldsymbol u_t\cdot\boldsymbol u^*_t$ 在底部参数基下的系数 |
-| `m1` | 参数方向 $\delta m$ |
+| `ubeta` | 当前正问题速度 $\boldsymbol u(\beta)$ |
+| `u_obs` | 顶部观测速度 $\boldsymbol u(\beta_0)\vert_{\Gamma_t}$ |
+| `dJdu` | 目标函数对状态的导数 $2(u_x-u_{{\rm obs},x})\boldsymbol e_x$ |
+| `v_adj` | 一次伴随速度 $\boldsymbol v$ |
+| `dJdbeta` | 梯度 $\boldsymbol u_t\cdot\boldsymbol v_t$ 在底部参数基下的系数 |
+| `beta1` | 参数方向 $\delta \beta$ |
 | `du1` | 增量正问题速度 $\tilde{\boldsymbol u}$ |
-| `us2` | 完整 Newton 增量伴随速度 $\tilde{\boldsymbol u}^{*,N}$ |
-| `us3` | Gauss--Newton 增量伴随速度 $\tilde{\boldsymbol u}^*$ |
-| `stokes_hessian(...)` | Gauss--Newton Hessian-vector product $H_{\rm GN}\delta m$ |
+| `v_newton` | 完整 Newton 增量伴随速度 $\tilde{\boldsymbol v}^{N}$ |
+| `v_gn` | Gauss--Newton 增量伴随速度 $\tilde{\boldsymbol v}$ |
+| `stokes_hessian(...)` | Gauss--Newton Hessian-vector product $H_{\rm GN}\delta \beta$ |
 | `integral_neumann_P2` | 顶部 $\Gamma_t$ 上的 P2 边界积分 |
 | `integral_robin_P2` | 底部 $\Gamma_b$ 上的 P2 边界积分 |
 | `extend_mid` | 把节点参数扩展到 P2 边界节点和边中点 |
@@ -695,12 +695,12 @@ $$
 本文和 `../nonlinearStokes/theory/adjoint.md` 的结构一致，但线性 Stokes 有两个简化：
 
 1. 体内算子不依赖当前速度，因此没有黏度切线张量 $\mathbb C(\boldsymbol u)$，也没有应力算子的二阶变分。
-2. Robin 滑移项是 $m\boldsymbol u_t$，所以参数变分只产生底部项 $\delta m\,\boldsymbol u_t$，梯度自然是底部切向内积 $\boldsymbol u_t\cdot\boldsymbol u^*_t$。
+2. Robin 滑移项是 $\beta\boldsymbol u_t$，所以参数变分只产生底部项 $\delta\beta\,\boldsymbol u_t$，梯度自然是底部切向内积 $\boldsymbol u_t\cdot\boldsymbol v_t$。
 
 因此，`stokes_inversion.m` 的核心算法可以概括为：
 
-1. 解正问题得到 $\boldsymbol u(m)$；
-2. 用顶部速度误差解一次伴随问题得到 $\boldsymbol u^*$；
-3. 在底部计算梯度 $\boldsymbol u_t\cdot\boldsymbol u^*_t$；
-4. 对每个 CG 方向，解一次增量正问题和一次 Gauss--Newton 增量伴随问题，得到 $H_{\rm GN}\delta m$；
-5. 用 $m\leftarrow m-dm$ 更新 Robin 系数。
+1. 解正问题得到 $\boldsymbol u(\beta)$；
+2. 用顶部速度误差解一次伴随问题得到 $\boldsymbol v$；
+3. 在底部计算梯度 $\boldsymbol u_t\cdot\boldsymbol v_t$；
+4. 对每个 CG 方向，解一次增量正问题和一次 Gauss--Newton 增量伴随问题，得到 $H_{\rm GN}\delta \beta$；
+5. 用 $\beta\leftarrow\beta-\delta\beta$ 更新 Robin 系数。
