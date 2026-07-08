@@ -3,14 +3,14 @@
 本文解释脚本
 
 ```text
-example/fem/NonlinearStokes/NonlinearStokesAdjInvSlabBed.m
+ifem/example/fem/NonlinearStokes/NonlinearStokesAdjInvSlabBed.m
 ```
 
 的目的、数学含义、代码结构和主要输出。
 
 这个脚本做的是一个二维非线性 Stokes 冰流模型中的底部滑移参数反演问题：
 
-- 正问题：给定底部滑移系数 $\beta(x)$，求速度 $u$ 和压力 $p$；
+- 正问题：给定底部滑移系数 $\beta(x)$，求速度 $\bm u$ 和压力 $p$；
 - 观测：取顶部边界上的水平速度；
 - 反问题：根据顶部速度观测恢复底部滑移系数 $\beta(x)$；
 - 优化变量：不是直接用 $\beta$，而是用
@@ -31,28 +31,28 @@ $$
 2. 用一致切线矩阵解伴随方程，得到目标函数梯度；
 3. 用增量状态方程和增量伴随方程构造矩阵自由的 Gauss--Newton Hessian-vector product；
 4. 用 PCG 解阻尼 Gauss--Newton / Levenberg--Marquardt 步；
-5. 用回溯线搜索接受下降步。
+5. 默认直接接受阻尼 Gauss--Newton 试探步；也可以通过 `defaultlinesearch` 打开回溯线搜索。
 
 ## 1. 脚本整体目标
 
-脚本开头注释说明它是 `NSAdjInvTikhonov.m` 的边界积分目标函数版本，主要区别是目标函数换成了顶部边界积分误差：
+脚本开头注释说明它是 `NonlinearStokesAdjInvSinBed.m` 的平坦/倾斜 slab-bed 对应版本。它使用相同的顶部边界积分目标函数，并用脚本内的 `if/elseif` 分支手动切换真实 $\beta$ 和初始扰动。
 
 $$
 J(q)
 =
 \frac{1}{2}
 \frac{
-\int_{\Gamma_t} (u(q)-u_{\mathrm{obs}})^2\,ds
+\int_{\Gamma_t} (\bm u(q)-\bm u_{\mathrm{obs}})^2\,\mathrm{d}s
 }{
-\int_{\Gamma_t} u_{\mathrm{obs}}^2\,ds
+\int_{\Gamma_t} \bm u_{\mathrm{obs}}^2\,\mathrm{d}s
 }.
 $$
 
 这里：
 
 - $\Gamma_t$ 是顶部边界；
-- $u(q)$ 是给定 $q$ 后求出的正问题速度；
-- $u_{\mathrm{obs}}$ 是合成观测数据；
+- $\bm u(q)$ 是给定 $q$ 后求出的正问题速度；
+- $\bm u_{\mathrm{obs}}$ 是合成观测数据；
 - 分母用于归一化，使目标函数变成无量纲量；
 - 脚本中没有额外正则项。
 
@@ -73,7 +73,7 @@ dataNormSquared = max(topWeight'*(dataObs.^2),eps);
 表示离散后的
 
 $$
-\int_{\Gamma_t} u_{\mathrm{obs}}^2\,ds.
+\int_{\Gamma_t} \bm u_{\mathrm{obs}}^2\,\mathrm{d}s.
 $$
 
 ## 2. 几何、网格和边界条件
@@ -81,10 +81,10 @@ $$
 脚本使用一个二维矩形区域作为初始网格：
 
 ```matlab
-L = 1;
-H = 0.5;
+L = 4;
+H = 1;
+h = 0.1;
 slope = 0.1;
-h = 1/8;
 
 [node,elem] = squaremesh([0,L,0,H],h);
 ```
@@ -188,7 +188,7 @@ $$
 其弧长微元为
 
 $$
-ds=\sqrt{1+\mathrm{slope}^2}\,dx.
+\mathrm{d}s=\sqrt{1+\mathrm{slope}^2}\,\mathrm{d}x.
 $$
 
 所以每个观测点分配的权重近似为
@@ -206,7 +206,7 @@ topWeight'*(residual.^2)
 近似
 
 $$
-\int_{\Gamma_t} (u-u_{\mathrm{obs}})^2\,ds.
+\int_{\Gamma_t} (u-u_{\mathrm{obs}})^2\,\mathrm{d}s.
 $$
 
 ## 5. 非线性 Stokes 模型设置
@@ -216,7 +216,7 @@ $$
 ```matlab
 pde.A = 1;
 pde.n = 3;
-pde.m = 1/3;
+pde.m = 1;
 pde.rho = 1;
 pde.gravity = [0,-1];
 pde.g_N = [];
@@ -226,7 +226,7 @@ pde.g_N = [];
 
 - `pde.A` 是 Glen 定律中的流动率；
 - `pde.n = 3` 是 Glen 指数；
-- `pde.m = 1/3` 是 Weertman 滑移律指数；
+- `pde.m = 1` 是 Weertman 滑移律指数；
 - `pde.rho` 和 `pde.gravity` 给出重力体力；
 - `pde.g_N = []` 表示顶部没有额外给定牵引。
 
@@ -248,7 +248,7 @@ NonlinearStokesP2P1(node,elem,bdFlag,pde,option)
 ```matlab
 option.eps_reg = 1e-3;
 option.maxIt = 200;
-option.tol = 1e-11;
+option.tol = 1e-6;
 option.damping = 0.8;
 option.printlevel = 0;
 option.quadorder = 6;
@@ -257,7 +257,7 @@ option.assemble_tangent = true;
 
 其中最重要的是：
 
-- `option.tol = 1e-11`：Picard 相对变化停止阈值；
+- `option.tol = 1e-6`：Picard 相对变化停止阈值；
 - `option.damping = 0.8`：Picard 阻尼系数；
 - `option.assemble_tangent = true`：求解完成后装配一致切线矩阵，用于伴随和增量方程。
 
@@ -269,22 +269,35 @@ option.assemble_tangent = true;
 
 ```matlab
 Nm = round(L/h);
+assert(abs(Nm*h-L) <= 100*eps(max(1,L)),...
+    'The parameter grid requires L/h to be an integer.');
 xBeta = (0:Nm-1)'*h;
-betaTrue = 1+0.1*cos(2*pi*xBeta/L);
-betaInitial = betaTrue+0.1*(sin(2*pi*xBeta/L)+0.25);
+xi = mod(xBeta,L)/L;
+betaTrue = 2*(1+0.25*cos(2*pi*xi));
+betaTrueName = 'trigonometric';
+betaPerturbation = 0.20*sin(2*pi*xi)+0.05;
+perturbationName = 'trigonometric';
+betaInitial = betaTrue.*(1+betaPerturbation);
 qTrue = log(betaTrue);
 q = log(betaInitial);
+betaPlotX = linspace(0,L,401)';
 ```
 
 当前设置下：
 
 ```text
-L = 1
-h = 1/8
-Nm = 8
+L = 4
+h = 0.1
+Nm = 40
 ```
 
-所以有 8 个参数自由度。
+所以有 40 个参数自由度。
+
+代码保留了几个互斥的 `if 0` / `elseif 1` 分支，用来切换真实参数和初始扰动：
+
+- `betaTrue` 可选 constant、linear、quadratic、trigonometric、mixed trigonometric；
+- `betaPerturbation` 可选 constant、linear、quadratic、trigonometric、mixed trigonometric；
+- 当前启用的是 trigonometric 真值和 trigonometric 初始扰动。
 
 `periodicP1` 用于把这些节点值插值成周期函数：
 
@@ -378,7 +391,7 @@ end
 当前最大迭代数为：
 
 ```matlab
-maxInverseIt = 10;
+maxInverseIt = 20;
 ```
 
 每一轮包含以下步骤。
@@ -898,7 +911,7 @@ $$
 - $\lambda$ 越大，步子越保守；
 - $\lambda$ 越小，越接近普通 Gauss--Newton。
 
-如果 line search 成功接受下降步：
+如果一个试探步被接受：
 
 ```matlab
 lambda = max(lambda/3,1e-12);
@@ -906,7 +919,7 @@ lambda = max(lambda/3,1e-12);
 
 阻尼减小。
 
-如果找不到下降步：
+如果试探步失败，或者启用线搜索后找不到下降步：
 
 ```matlab
 lambda = 10*lambda;
@@ -916,9 +929,45 @@ lambda = 10*lambda;
 
 这是一种简单的 Levenberg--Marquardt 调节策略。
 
-## 15. 回溯线搜索
+## 15. 试探步和可选回溯线搜索
 
-PCG 得到方向 `step` 后，脚本不直接接受，而是做回溯线搜索：
+PCG 得到方向 `step` 后，脚本根据
+
+```matlab
+useLineSearch = defaultlinesearch();
+```
+
+选择更新方式。当前局部函数
+
+```matlab
+function value = defaultlinesearch()
+    value = false;
+end
+```
+
+表示默认不做回溯线搜索。
+
+默认分支直接尝试完整步：
+
+```matlab
+qTrial = q+step;
+[uTrial,~,trialInfo] = solveforward(qTrial,u,pde,option,...
+    node,elem,bdFlag,xBeta,L);
+optimizationForwardSolves = optimizationForwardSolves+1;
+if trialInfo.converged
+    q = qTrial;
+    uWarm = uTrial;
+    lambda = max(lambda/3,1e-12);
+else
+    lambda = 10*lambda;
+    warning('iFEM:NonlinearAdjointNoStep',...
+        'Undamped Gauss-Newton trial did not converge.');
+end
+```
+
+也就是说，默认情况下只要求 trial 正问题收敛，不再额外检查目标函数是否下降。若要改成回溯线搜索，可以把 `defaultlinesearch` 改为返回 `true`。
+
+启用线搜索后，代码最多尝试 10 个步长：
 
 ```matlab
 accepted = false;
@@ -937,7 +986,7 @@ for lineSearchIt = 1:10
 end
 ```
 
-流程是：
+线搜索流程是：
 
 1. 先尝试完整步长 `stepLength=1`；
 2. 如果目标函数下降，则接受；
@@ -945,7 +994,7 @@ end
 4. 最多尝试 10 次；
 5. 如果仍然失败，则不更新 `q`，只增大 `lambda`。
 
-线搜索中每一次 trial 都会调用一次正问题求解器。
+无论是否启用线搜索，每一次 trial 都会调用一次正问题求解器，并计入 `optimizationForwardSolves`。
 
 ## 16. 停止条件
 
@@ -986,7 +1035,7 @@ stepTolerance = 1e-7;
 如果达到最大反演迭代数：
 
 ```matlab
-maxInverseIt = 10;
+maxInverseIt = 20;
 ```
 
 循环也会结束。
@@ -998,7 +1047,7 @@ maxInverseIt = 10;
 表头为：
 
 ```text
-it objective betaL2rel betaLinfAbs betaLinfRel |grad| fPicard pcgIt pcgRel ls stop
+it objective betaLinfRel |grad| fPicard pcgIt pcgRel ls time stop
 ```
 
 各列含义如下。
@@ -1014,27 +1063,11 @@ it objective betaL2rel betaLinfAbs betaLinfRel |grad| fPicard pcgIt pcgRel ls st
 $$
 \frac{1}{2}
 \frac{
-\int_{\Gamma_t}(u-u_{\mathrm{obs}})^2\,ds
+\int_{\Gamma_t}(u-u_{\mathrm{obs}})^2\,\mathrm{d}s
 }{
-\int_{\Gamma_t}u_{\mathrm{obs}}^2\,ds
+\int_{\Gamma_t}u_{\mathrm{obs}}^2\,\mathrm{d}s
 }.
 $$
-
-### `betaL2rel`
-
-恢复参数与真实参数之间的相对二范数误差：
-
-```matlab
-norm(betaCurrent-betaTrue)/norm(betaTrue)
-```
-
-### `betaLinfAbs`
-
-绝对无穷范数误差：
-
-```matlab
-norm(betaCurrent-betaTrue,inf)
-```
 
 ### `betaLinfRel`
 
@@ -1076,7 +1109,15 @@ PCG 返回的相对残差。
 
 本轮 line search 中尝试了多少个 trial 正问题。
 
-如果因为梯度停止而没有 line search，则为 `0`。
+默认没有 line search 时这一列为 `0`。如果因为梯度停止而没有进入 PCG 和 trial 步，也为 `0`。
+
+### `time`
+
+本轮反演迭代耗时，单位为秒：
+
+```matlab
+iterationTime = toc(iterationTimer);
+```
 
 ### `stop`
 
@@ -1084,6 +1125,7 @@ PCG 返回的相对残差。
 
 - `grad`：梯度范数达到阈值；
 - `step`：步长达到阈值；
+- `obj`：目标函数已经小于 `1e-15`；
 - `-`：本轮没有停止，继续迭代。
 
 ## 18. Summary 输出
@@ -1099,7 +1141,7 @@ fprintf('  optimization forward solves: %d\n',...
 
 - 每轮主正问题；
 - 第一次迭代导数检查中的两次有限差分正问题；
-- line search 中的 trial 正问题。
+- trial 步中的正问题；启用 line search 时包括每次回溯 trial。
 
 不包括：
 
@@ -1219,17 +1261,17 @@ finiteDifferenceObservation'*finiteDifferenceObservation
 对应代码：
 
 ```matlab
-plot(plotFine,betaTruePlot,'k-',...)
-plot(plotFine,betaInitialPlot,'b--',...)
-plot(plotFine,betaRecoveredPlot,'r-',...)
+plot(betaPlotX,betaTruePlot,'k-',...)
+plot(betaPlotX,betaInitialPlot,'b--',...)
+plot(betaPlotX,betaRecoveredPlot,'r-',...)
 plot(xBeta,betaRecovered,'ro',...)
 ```
 
-### Figure 2: beta 误差历史
+### Figure 2: 目标函数和 beta 误差历史
 
 画出：
 
-- 相对二范数误差；
+- 目标函数；
 - 绝对无穷范数误差；
 - 相对无穷范数误差。
 
@@ -1250,9 +1292,9 @@ plot(xObs,dataObs,'ko',xObs,uRecovered(topDof),'r-',...)
 
 画出：
 
+- slab-bed 网格；
 - 恢复的水平速度 $u_x$；
 - 恢复的竖直速度 $u_y$；
-- 速度大小 $|u|$；
 - 压力 $p$。
 
 这些图用于检查恢复后的正问题解是否合理。
@@ -1429,4 +1471,4 @@ pcg(hessian,-gradient,...)
 
 ## 24. 一句话总结
 
-`NonlinearStokesAdjInvSlabBed.m` 是一个基于顶部边界速度积分误差的非线性 Stokes 底部滑移反演脚本。它用 Picard 方法求正问题，用一致切线矩阵解伴随方程得到梯度，用矩阵自由 Gauss--Newton/LM 方法计算更新步，并通过 line search 保证目标函数下降。
+`NonlinearStokesAdjInvSlabBed.m` 是一个基于顶部边界速度积分误差的非线性 Stokes 底部滑移反演脚本。它用 Picard 方法求正问题，用一致切线矩阵解伴随方程得到梯度，用矩阵自由 Gauss--Newton/LM 方法计算更新步；默认直接尝试完整 trial 步，也可通过 `defaultlinesearch` 切换为回溯线搜索。
