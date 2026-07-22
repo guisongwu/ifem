@@ -20,6 +20,16 @@ close all;
 clear variables;
 set(groot,'DefaultFigureVisible','on');
 
+scriptName = mfilename;
+outputDir = outputdirectory(scriptName);
+diaryFile = fullfile(outputDir,'console.txt');
+diary off;
+diary(diaryFile);
+diaryCleanup = onCleanup(@() diary('off'));
+fprintf('Console output will be saved to %s\n',diaryFile);
+
+try
+
 %% Geometry and mesh
 % Slab cases.  H is fixed; toggle exactly one L branch to compare how
 % horizontal length affects beta identifiability.
@@ -415,7 +425,19 @@ axis tight;
 colorbar;
 title('recovered pressure','FontSize',14);
 drawnow;
-exportepsfigures(mfilename);
+exportepsfigures(scriptName);
+fprintf('  saved console output to %s\n',diaryFile);
+diary off;
+clear diaryCleanup;
+
+catch exception
+    fprintf(2,'\n%s failed. Console output saved to %s\n',...
+        scriptName,diaryFile);
+    fprintf(2,'%s\n',getReport(exception,'extended','hyperlinks','off'));
+    diary off;
+    clear diaryCleanup;
+    rethrow(exception);
+end
 
 
 function printiterationheader()
@@ -611,11 +633,15 @@ function value = defaultlinesearch()
     value = false;
 end
 
-function exportepsfigures(scriptName)
+function outputDir = outputdirectory(scriptName)
     outputDir = fullfile(fileparts(mfilename('fullpath')),'output',scriptName);
     if ~exist(outputDir,'dir')
         mkdir(outputDir);
     end
+end
+
+function exportepsfigures(scriptName)
+    outputDir = outputdirectory(scriptName);
 
     figs = findall(0,'Type','figure');
     if isempty(figs)

@@ -128,6 +128,7 @@ fprintf(['  beta true: %s, initial perturbation: %s, ',...
 
 %% Inverse options
 maxInverseIt = 30;
+alpha = 0;
 lambda = 1e-7;
 pcgTolerance = 1e-8;
 pcgMaxIt = 50;
@@ -135,6 +136,8 @@ stepTolerance = 1e-7;
 gradientTolerance = 1e-9;
 objectiveTolerance = 1e-15;
 useLineSearch = defaultlinesearch();
+D = spdiags([-ones(Nm,1),ones(Nm,1)],[0,1],Nm,Nm);
+D(Nm,1) = 1;
 
 history.objective = NaN(maxInverseIt,1);
 history.dataResidual = NaN(maxInverseIt,1);
@@ -160,14 +163,18 @@ for k = 1:maxInverseIt
     uWarm = u;
 
     residual = u(topDof)-dataObs;
-    objective = 0.5*(topWeight'*(residual.^2))/dataNormSquared;
+    dataObjective = 0.5*(topWeight'*(residual.^2))/dataNormSquared;
+    regularization = D*q;
+    regularizationObjective = 0.5*alpha*...
+        (regularization'*regularization);
+    objective = dataObjective+regularizationObjective;
     G = assembleparameterderivative(eqn,q,xBeta,L,Nm);
 
     observationGradient = zeros(size(u));
     observationGradient(topDof) = topWeight.*residual/dataNormSquared;
     observationGradientMaster = eqn.periodicProjection'*observationGradient;
     adjoint = eqn.tangent'\(-observationGradientMaster);
-    gradient = G'*adjoint;
+    gradient = G'*adjoint+alpha*(D'*(D*q));
 
     betaCurrent = exp(q);
     history.objective(k) = objective;
@@ -182,7 +189,8 @@ for k = 1:maxInverseIt
 
     if k == 1
         derivativeCheck = verifyderivatives(q,u,eqn,G,gradient,...
-            dataObs,topWeight,dataNormSquared,pde,option,xBeta,L,topDof);
+            dataObs,topWeight,dataNormSquared,pde,option,xBeta,L,topDof,...
+            D,alpha);
         optimizationForwardSolves = optimizationForwardSolves+...
             derivativeCheck.forwardSolves;
     end
@@ -206,7 +214,7 @@ for k = 1:maxInverseIt
     end
 
     hessian = @(direction) gaussnewtonproduct(direction,eqn,G,...
-        topDof,topWeight,dataNormSquared,lambda);
+        topDof,topWeight,dataNormSquared,D,alpha,lambda);
     [step,flag,relativeResidual,pcgIt] = pcg(...
         hessian,-gradient,pcgTolerance,pcgMaxIt);
     if flag ~= 0
@@ -235,8 +243,10 @@ for k = 1:maxInverseIt
             optimizationForwardSolves = optimizationForwardSolves+1;
             if trialInfo.converged
                 trialResidual = uTrial(topDof)-dataObs;
+                trialRegularization = D*qTrial;
                 trialObjective = 0.5*(topWeight'*(trialResidual.^2))/...
-                    dataNormSquared;
+                    dataNormSquared+0.5*alpha*(trialRegularization'*...
+                    trialRegularization);
                 if trialObjective < objective
                     q = qTrial;
                     uWarm = uTrial;
@@ -362,6 +372,8 @@ colorbar;
 title('recovered u','FontSize',14);
 view(2);
 drawnow;
+exportepsfigures(mfilename);
+
 
 function [u,eqn,info,node,elem,bdFlag] = solveforward(...
         q,u0,pde,option,xBeta,L)
@@ -397,7 +409,7 @@ function G = assembleparameterderivative(eqn,q,xBeta,L,Nm)
 end
 
 function product = gaussnewtonproduct(direction,eqn,G,topDof,...
-        topWeight,dataNormSquared,lambda)
+        topWeight,dataNormSquared,D,alpha,lambda)
     incrementalMaster = eqn.tangent\(-G*direction);
     incrementalState = eqn.periodicProjection*incrementalMaster;
     incrementalObservation = zeros(size(incrementalState));
@@ -406,11 +418,12 @@ function product = gaussnewtonproduct(direction,eqn,G,topDof,...
     incrementalObservationMaster = ...
         eqn.periodicProjection'*incrementalObservation;
     incrementalAdjoint = eqn.tangent'\(-incrementalObservationMaster);
-    product = G'*incrementalAdjoint+lambda*direction;
+    product = G'*incrementalAdjoint+alpha*(D'*(D*direction))+...
+        lambda*direction;
 end
 
 function check = verifyderivatives(q,u,eqn,G,gradient,dataObs,topWeight,...
-        dataNormSquared,pde,option,xBeta,L,topDof)
+        dataNormSquared,pde,option,xBeta,L,topDof,D,alpha)
     direction = sin((1:numel(q))');
     direction = direction/norm(direction);
     epsilon = 1e-3;
@@ -425,9 +438,11 @@ function check = verifyderivatives(q,u,eqn,G,gradient,dataObs,topWeight,...
     plusResidual = uPlus(topDof)-dataObs;
     minusResidual = uMinus(topDof)-dataObs;
     plusObjective = 0.5*(topWeight'*(plusResidual.^2))/...
-        dataNormSquared;
+        dataNormSquared+0.5*alpha*...
+        ((D*(q+epsilon*direction))'*(D*(q+epsilon*direction)));
     minusObjective = 0.5*(topWeight'*(minusResidual.^2))/...
-        dataNormSquared;
+        dataNormSquared+0.5*alpha*...
+        ((D*(q-epsilon*direction))'*(D*(q-epsilon*direction)));
     finiteDifference = (plusObjective-minusObjective)/(2*epsilon);
     adjointDirection = gradient'*direction;
     relativeGradientError = abs(finiteDifference-adjointDirection)/...
@@ -441,14 +456,23 @@ function check = verifyderivatives(q,u,eqn,G,gradient,dataObs,topWeight,...
 
     tangentObservation = ...
         sqrt(topWeight/dataNormSquared).*incrementalState(topDof);
+    tangentRegularization = sqrt(alpha)*(D*direction);
     finiteDifferenceObservation = ...
         sqrt(topWeight/dataNormSquared).*...
         (uPlus(topDof)-uMinus(topDof))/(2*epsilon);
+    finiteDifferenceRegularization = ...
+        sqrt(alpha)*(D*(q+epsilon*direction)...
+        -D*(q-epsilon*direction))/(2*epsilon);
     relativeGaussNewtonError = abs(...
         tangentObservation'*tangentObservation-...
-        finiteDifferenceObservation'*finiteDifferenceObservation)/...
+        finiteDifferenceObservation'*finiteDifferenceObservation+...
+        tangentRegularization'*tangentRegularization-...
+        finiteDifferenceRegularization'*finiteDifferenceRegularization)/...
         max([eps,tangentObservation'*tangentObservation,...
-             finiteDifferenceObservation'*finiteDifferenceObservation]);
+             finiteDifferenceObservation'*finiteDifferenceObservation,...
+             tangentRegularization'*tangentRegularization,...
+             finiteDifferenceRegularization'*...
+             finiteDifferenceRegularization]);
 
     check.stateError = relativeStateError;
     check.gradientError = relativeGradientError;
@@ -524,4 +548,30 @@ end
 
 function value = defaultlinesearch()
     value = false;
+end
+
+function exportepsfigures(scriptName)
+    outputDir = fullfile(fileparts(mfilename('fullpath')),'output_eps',scriptName);
+    if ~exist(outputDir,'dir')
+        mkdir(outputDir);
+    end
+
+    figs = findall(0,'Type','figure');
+    if isempty(figs)
+        return;
+    end
+    figNumbers = arrayfun(@(fig) fig.Number,figs);
+    [~,order] = sort(figNumbers);
+    figs = figs(order);
+
+    for i = 1:numel(figs)
+        fig = figs(i);
+        if isgraphics(fig,'figure')
+            set(fig,'Renderer','painters');
+            filename = fullfile(outputDir,sprintf('%s_figure_%02d.eps',...
+                scriptName,fig.Number));
+            print(fig,filename,'-depsc','-vector');
+        end
+    end
+    fprintf('  exported EPS figures to %s\n',outputDir);
 end

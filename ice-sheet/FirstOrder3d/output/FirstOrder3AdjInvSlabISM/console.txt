@@ -1,0 +1,20 @@
+Console output will be saved to /home/wugs/Github/ifem/ice-sheet/FirstOrder3d/output/FirstOrder3AdjInvSlabISM/console.txt
+3-D FO ISM slab-bed beta inversion: L = 5.00 km, W = 5.00 km, H = 1.00 km
+  beta parameters: 100, top velocity observations: 800
+
+ it    objective      betaLinfRel   |grad|    fPicard pcgIt   pcgRel   ls    time(s)  stop
+ --  ------------  ------------  ------------  ------- ----- ---------- --  --------  ----
+  1  2.4506e-05    1.7047e-01    1.0878e-04       53     3  8.1394e-10   0     64.19  -
+  2  1.7484e-08    1.2670e-01    2.1526e-06        1     4  9.3641e-08   0     17.85  -
+  3  7.1866e-09    1.1557e-01    5.5359e-08        1     7  9.0659e-09   0     19.81  -
+  4  4.3189e-09    8.8847e-02    2.3431e-07        1     8  8.3989e-08   0     21.04  -
+  5  1.7764e-09    4.8101e-02    5.7308e-07        1    11  2.2759e-09   0     20.26  -
+  6  3.4303e-10    1.8176e-02    3.6977e-07        1    11  5.0425e-08   0     18.60  -
+  7  4.0544e-12    9.9325e-03    3.9553e-08        1    12  3.9821e-08   0     13.06  -
+  8  6.0889e-14    8.6163e-03    6.0195e-10        1     -           -   0      1.51  grad
+
+Summary
+  optimization forward solves: 15
+  final beta Linf error: 1.0340e+01, relative Linf: 8.6163e-03
+  exported EPS figures to /home/wugs/Github/ifem/ice-sheet/FirstOrder3d/output/FirstOrder3AdjInvSlabISM
+  saved console output to /home/wugs/Github/ifem/ice-sheet/FirstOrder3d/output/FirstOrder3AdjInvSlabISM/console.txt

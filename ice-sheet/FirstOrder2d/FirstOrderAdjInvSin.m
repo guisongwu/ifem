@@ -13,6 +13,16 @@ else
 end
 set(groot,'DefaultFigureVisible',getconfig(foInvConfig,'figureVisible','on'));
 
+scriptName = mfilename;
+outputDir = outputdirectory(scriptName);
+diaryFile = fullfile(outputDir,'console.txt');
+diary off;
+diary(diaryFile);
+diaryCleanup = onCleanup(@() diary('off'));
+fprintf('Console output will be saved to %s\n',diaryFile);
+
+try
+
 %% Geometry and model
 % Fixed-thickness cases.  Toggle exactly one branch to compare how
 % horizontal length affects beta identifiability from top-surface velocity
@@ -388,7 +398,19 @@ colorbar;
 title('recovered u','FontSize',14);
 view(2);
 drawnow;
-exportepsfigures(mfilename);
+exportepsfigures(scriptName);
+fprintf('  saved console output to %s\n',diaryFile);
+diary off;
+clear diaryCleanup;
+
+catch exception
+    fprintf(2,'\n%s failed. Console output saved to %s\n',...
+        scriptName,diaryFile);
+    fprintf(2,'%s\n',getReport(exception,'extended','hyperlinks','off'));
+    diary off;
+    clear diaryCleanup;
+    rethrow(exception);
+end
 
 
 function [u,eqn,info,node,elem,bdFlag] = solveforward(...
@@ -597,11 +619,15 @@ function value = getconfig(config,name,defaultValue)
     end
 end
 
-function exportepsfigures(scriptName)
+function outputDir = outputdirectory(scriptName)
     outputDir = fullfile(fileparts(mfilename('fullpath')),'output',scriptName);
     if ~exist(outputDir,'dir')
         mkdir(outputDir);
     end
+end
+
+function exportepsfigures(scriptName)
+    outputDir = outputdirectory(scriptName);
 
     figs = findall(0,'Type','figure');
     if isempty(figs)

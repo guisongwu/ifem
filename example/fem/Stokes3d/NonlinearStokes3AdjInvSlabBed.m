@@ -76,6 +76,7 @@ betaInitial = betaTrue.*(1+0.15*sin(2*pi*xi).*cos(2*pi*eta)+0.05);
 qTrue = log(betaTrue(:));
 q = log(betaInitial(:));
 Nm = numel(q);
+D = periodicgradient2d(numel(xBeta),numel(yBeta));
 
 fprintf('  beta parameters: %d, top velocity observations: %d\n',...
     Nm,numel(topDof));
@@ -89,6 +90,7 @@ dataNormSquared = max(topWeight'*(dataObs.^2),eps);
 
 %% Inversion loop
 maxInverseIt = 20;
+alpha = 0;
 lambda = 1e-6;
 pcgTolerance = 1e-7;
 pcgMaxIt = 50;
@@ -121,13 +123,15 @@ for k = 1:maxInverseIt
     uWarm = u;
 
     residual = u(topDof)-dataObs;
-    objective = 0.5*(topWeight'*(residual.^2))/dataNormSquared;
+    dataObjective = 0.5*(topWeight'*(residual.^2))/dataNormSquared;
+    regularization = D*q;
+    objective = dataObjective+0.5*alpha*(regularization'*regularization);
     G = assembleparameterderivative(eqn,q,xBeta,yBeta,L,W);
 
     observationGradient = zeros(size(eqn.tangent,1),1);
     observationGradient(topDof) = topWeight.*residual/dataNormSquared;
     adjoint = eqn.tangent'\(-observationGradient);
-    gradient = G'*adjoint;
+    gradient = G'*adjoint+alpha*(D'*(D*q));
 
     betaCurrent = exp(q);
     betaTrueVector = exp(qTrue);
@@ -161,7 +165,7 @@ for k = 1:maxInverseIt
     end
 
     hessian = @(direction) gaussnewtonproduct(direction,eqn,G,...
-        topDof,topWeight,dataNormSquared,lambda);
+        topDof,topWeight,dataNormSquared,D,alpha,lambda);
     [step,flag,pcgRel,pcgIt] = pcg(...
         hessian,-gradient,pcgTolerance,pcgMaxIt);
     if flag ~= 0
@@ -190,8 +194,10 @@ for k = 1:maxInverseIt
             optimizationForwardSolves = optimizationForwardSolves+1;
             if trialInfo.converged
                 trialResidual = uTrial(topDof)-dataObs;
+                trialRegularization = D*qTrial;
                 trialObjective = 0.5*(topWeight'*(trialResidual.^2))/...
-                    dataNormSquared;
+                    dataNormSquared+0.5*alpha*(trialRegularization'*...
+                    trialRegularization);
                 if trialObjective < objective
                     q = qTrial;
                     uWarm = uTrial;
@@ -328,6 +334,8 @@ set(gcf,'Visible','on');
 clf;
 plotsurfacefields(node,uRecovered,pRecovered,Nu,H,slope,L,W);
 sgtitle('recovered top-surface fields');
+exportepsfigures(mfilename);
+
 
 function node = maptoslab(refnode,L,W,H,slope)
     node = refnode;
@@ -368,13 +376,48 @@ function plottopfield(topNode,topElem,value,L,W,titleText)
 end
 
 function product = gaussnewtonproduct(direction,eqn,G,topDof,...
-        topWeight,dataNormSquared,lambda)
+        topWeight,dataNormSquared,D,alpha,lambda)
     incrementalState = eqn.tangent\(-G*direction);
     incrementalObservation = zeros(size(eqn.tangent,1),1);
     incrementalObservation(topDof) = ...
         topWeight.*incrementalState(topDof)/dataNormSquared;
     incrementalAdjoint = eqn.tangent'\(-incrementalObservation);
-    product = G'*incrementalAdjoint+lambda*direction;
+    product = G'*incrementalAdjoint+alpha*(D'*(D*direction))+...
+        lambda*direction;
+end
+
+function D = periodicgradient2d(nx,ny)
+    nm = nx*ny;
+    rows = zeros(4*nm,1);
+    cols = zeros(4*nm,1);
+    vals = zeros(4*nm,1);
+    cursor = 0;
+    for iy = 1:ny
+        for ix = 1:nx
+            id = sub2ind([nx,ny],ix,iy);
+            ixp = mod(ix,nx)+1;
+            iyp = mod(iy,ny)+1;
+            idx = sub2ind([nx,ny],ixp,iy);
+            idy = sub2ind([nx,ny],ix,iyp);
+            cursor = cursor+1;
+            rows(cursor) = id;
+            cols(cursor) = id;
+            vals(cursor) = -1;
+            cursor = cursor+1;
+            rows(cursor) = id;
+            cols(cursor) = idx;
+            vals(cursor) = 1;
+            cursor = cursor+1;
+            rows(cursor) = nm+id;
+            cols(cursor) = id;
+            vals(cursor) = -1;
+            cursor = cursor+1;
+            rows(cursor) = nm+id;
+            cols(cursor) = idy;
+            vals(cursor) = 1;
+        end
+    end
+    D = sparse(rows,cols,vals,2*nm,nm);
 end
 
 function G = assembleparameterderivative(eqn,q,xBeta,yBeta,L,W)
@@ -461,4 +504,30 @@ end
 
 function value = defaultlinesearch()
     value = false;
+end
+
+function exportepsfigures(scriptName)
+    outputDir = fullfile(fileparts(mfilename('fullpath')),'output_eps',scriptName);
+    if ~exist(outputDir,'dir')
+        mkdir(outputDir);
+    end
+
+    figs = findall(0,'Type','figure');
+    if isempty(figs)
+        return;
+    end
+    figNumbers = arrayfun(@(fig) fig.Number,figs);
+    [~,order] = sort(figNumbers);
+    figs = figs(order);
+
+    for i = 1:numel(figs)
+        fig = figs(i);
+        if isgraphics(fig,'figure')
+            set(fig,'Renderer','painters');
+            filename = fullfile(outputDir,sprintf('%s_figure_%02d.eps',...
+                scriptName,fig.Number));
+            print(fig,filename,'-depsc','-vector');
+        end
+    end
+    fprintf('  exported EPS figures to %s\n',outputDir);
 end

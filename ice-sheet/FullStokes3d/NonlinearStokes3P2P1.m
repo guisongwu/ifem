@@ -529,6 +529,7 @@ end
             [I,J,S,row] = appendperiodicconstraints(I,J,S,row,udofNode,0);
             [I,J,S,row] = appendperiodicconstraints(I,J,S,row,udofNode,Nu);
             [I,J,S,row] = appendperiodicconstraints(I,J,S,row,udofNode,2*Nu);
+            [I,J,S,row] = appendperiodicconstraints(I,J,S,row,node,3*Nu);
         end
         fixedDof = unique(dirichletDof(:));
         if option.periodic

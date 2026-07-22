@@ -88,7 +88,7 @@ dataNormSquared = max(topWeight'*(dataObs.^2),eps);
 
 %% Inversion loop
 maxInverseIt = 20;
-alpha = 1e-11;
+alpha = 0;
 lambda = 1e-6;
 pcgTolerance = 1e-7;
 pcgMaxIt = 50;
@@ -337,6 +337,8 @@ set(gcf,'Visible','on');
 clf;
 plotsurfacefields(node,solnRecovered,Ndof,H,slope,L,W);
 sgtitle('recovered top-surface FO fields');
+exportepsfigures(mfilename);
+
 
 function node = maptoslab(refnode,L,W,H,slope)
     node = refnode;
@@ -502,4 +504,30 @@ end
 
 function value = defaultlinesearch()
     value = false;
+end
+
+function exportepsfigures(scriptName)
+    outputDir = fullfile(fileparts(mfilename('fullpath')),'output_eps',scriptName);
+    if ~exist(outputDir,'dir')
+        mkdir(outputDir);
+    end
+
+    figs = findall(0,'Type','figure');
+    if isempty(figs)
+        return;
+    end
+    figNumbers = arrayfun(@(fig) fig.Number,figs);
+    [~,order] = sort(figNumbers);
+    figs = figs(order);
+
+    for i = 1:numel(figs)
+        fig = figs(i);
+        if isgraphics(fig,'figure')
+            set(fig,'Renderer','painters');
+            filename = fullfile(outputDir,sprintf('%s_figure_%02d.eps',...
+                scriptName,fig.Number));
+            print(fig,filename,'-depsc','-vector');
+        end
+    end
+    fprintf('  exported EPS figures to %s\n',outputDir);
 end

@@ -388,6 +388,8 @@ colorbar;
 title('recovered u','FontSize',14);
 view(2);
 drawnow;
+exportepsfigures(mfilename);
+
 
 function [u,eqn,info,node,elem,bdFlag] = solveforward(...
         q,u0,pde,option,xBeta,L)
@@ -593,4 +595,30 @@ function value = getconfig(config,name,defaultValue)
     else
         value = defaultValue;
     end
+end
+
+function exportepsfigures(scriptName)
+    outputDir = fullfile(fileparts(mfilename('fullpath')),'output_eps',scriptName);
+    if ~exist(outputDir,'dir')
+        mkdir(outputDir);
+    end
+
+    figs = findall(0,'Type','figure');
+    if isempty(figs)
+        return;
+    end
+    figNumbers = arrayfun(@(fig) fig.Number,figs);
+    [~,order] = sort(figNumbers);
+    figs = figs(order);
+
+    for i = 1:numel(figs)
+        fig = figs(i);
+        if isgraphics(fig,'figure')
+            set(fig,'Renderer','painters');
+            filename = fullfile(outputDir,sprintf('%s_figure_%02d.eps',...
+                scriptName,fig.Number));
+            print(fig,filename,'-depsc','-vector');
+        end
+    end
+    fprintf('  exported EPS figures to %s\n',outputDir);
 end

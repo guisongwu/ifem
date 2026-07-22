@@ -1,0 +1,18 @@
+Console output will be saved to /home/wugs/Github/ifem/ice-sheet/FullStokes3d/output/FullStokes3AdjInvSlabISM/FullStokes3AdjInvSlabISM_console.txt
+3-D slab-bed beta inversion: L = 5.0000e+00, W = 5.0000e+00, H = 1.0000e+00
+  beta parameters: 100, top velocity observations: 800
+
+ it    objective    betaLinfRel    |grad|    fPicard pcgIt   pcgRel   ls    time(s)  stop
+ --  ------------  ------------  ------------  ------- ----- ---------- --  --------  ----
+  1  2.2676e-05    1.7047e-01    1.0013e-04       51     5  6.2087e-08   0    315.76  -
+  2  8.0750e-08    7.8824e-02    2.6399e-06        9     9  2.3390e-08   0    130.02  -
+  3  9.1665e-09    2.8400e-02    8.6115e-07        9    12  8.5571e-08   0    124.03  -
+  4  2.2459e-10    5.5282e-03    1.6474e-07        9    14  9.3679e-08   0    106.03  -
+  5  7.4217e-13    1.0823e-03    4.5078e-09        9    26  7.1836e-08   0    115.19  -
+  6  1.6753e-14    5.6175e-04    3.2301e-11        9     -           -   0     44.65  grad
+
+Summary
+  optimization forward solves: 11
+  final beta Linf error: 6.7410e-01, relative Linf: 5.6175e-04
+  exported EPS figures to /home/wugs/Github/ifem/ice-sheet/FullStokes3d/output/FullStokes3AdjInvSlabISM
+  saved console output to /home/wugs/Github/ifem/ice-sheet/FullStokes3d/output/FullStokes3AdjInvSlabISM/console.txt

@@ -17,7 +17,8 @@
 %     0.5 * int_{\Gamma_t} (u-u_obs)^2 ds
 %         / int_{\Gamma_t} u_obs^2 ds.
 %
-% No regularization term is included in the inverse objective.
+% A periodic first-difference Tikhonov term can be added to the inverse
+% objective through alpha.  The default alpha=0 keeps the data-only case.
 %
 % The state equation uses nonlinear Glen viscosity and a regularized
 % Weertman sliding law.  The inversion variable is q=log(beta).
@@ -149,12 +150,15 @@ dataNormSquared = max(topWeight'*(dataObs.^2),eps);
 
 %% Inverse options
 maxInverseIt = 20;
+alpha = 0;
 lambda = 1e-7;
 pcgTolerance = 1e-8;
 pcgMaxIt = 50;
 stepTolerance = 1e-7;
 gradientTolerance = 1e-9;
 useLineSearch = defaultlinesearch();
+D = spdiags([-ones(Nm,1),ones(Nm,1)],[0,1],Nm,Nm);
+D(Nm,1) = 1;
 
 history.objective = NaN(maxInverseIt,1);
 history.dataResidual = NaN(maxInverseIt,1);
@@ -183,7 +187,10 @@ for k = 1:maxInverseIt
 
     residual = u(topDof)-dataObs;
     dataObjective = 0.5*(topWeight'*(residual.^2))/dataNormSquared;
-    objective = dataObjective;
+    regularization = D*q;
+    regularizationObjective = 0.5*alpha*...
+        (regularization'*regularization);
+    objective = dataObjective+regularizationObjective;
 
     % G is R_q, the derivative of the nonlinear residual with respect to
     % q=log(beta).  The chain rule delta beta = beta * delta q is applied
@@ -195,7 +202,7 @@ for k = 1:maxInverseIt
     observationGradient = zeros(size(eqn.tangent,1),1);
     observationGradient(topDof) = topWeight.*residual/dataNormSquared;
     adjoint = eqn.tangent'\(-observationGradient);
-    gradient = G'*adjoint;
+    gradient = G'*adjoint+alpha*(D'*(D*q));
 
     history.objective(k) = objective;
     history.dataResidual(k) = sqrt(...
@@ -211,7 +218,7 @@ for k = 1:maxInverseIt
     if k == 1
         derivativeCheck = verifyderivatives(...
             q,u,eqn,G,gradient,dataObs,topWeight,dataNormSquared,...
-            pde,option,node,elem,bdFlag,xBeta,L,topDof);
+            pde,option,node,elem,bdFlag,xBeta,L,topDof,D,alpha);
         optimizationForwardSolves = optimizationForwardSolves+...
             derivativeCheck.forwardSolves;
     end
@@ -235,7 +242,7 @@ for k = 1:maxInverseIt
     end
 
     hessian = @(direction) gaussnewtonproduct(direction,eqn,G,...
-        topDof,topWeight,dataNormSquared,lambda);
+        topDof,topWeight,dataNormSquared,D,alpha,lambda);
     % PCG only needs Hessian-vector products.  gaussnewtonproduct applies
     % the matrix-free GN Hessian plus the LM damping lambda*I.
     [step,flag,relativeResidual,pcgIt] = pcg(...
@@ -268,8 +275,10 @@ for k = 1:maxInverseIt
             optimizationForwardSolves = optimizationForwardSolves+1;
             if trialInfo.converged
                 trialResidual = uTrial(topDof)-dataObs;
+                trialRegularization = D*qTrial;
                 trialObjective = 0.5*(topWeight'*(trialResidual.^2)) ...
-                    /dataNormSquared;
+                    /dataNormSquared+0.5*alpha*...
+                    (trialRegularization'*trialRegularization);
                 if trialObjective < objective
                     q = qTrial;
                     uWarm = uTrial;
@@ -421,6 +430,8 @@ axis tight;
 colorbar;
 title('recovered pressure','FontSize',14);
 drawnow;
+exportepsfigures(mfilename);
+
 
 function printiterationheader()
     width = [3,12,11,12,7,5,10,2,10,4];
@@ -478,7 +489,7 @@ function text = centertext(text,width)
 end
 
 function product = gaussnewtonproduct(direction,eqn,G,topDof,...
-        topWeight,dataNormSquared,lambda)
+        topWeight,dataNormSquared,D,alpha,lambda)
     % Linearized state equation:
     %     R_U * deltaU = -R_q * direction.
     incrementalState = eqn.tangent\(-G*direction);
@@ -492,11 +503,13 @@ function product = gaussnewtonproduct(direction,eqn,G,topDof,...
     % Linearized adjoint equation gives J_obs' * J_obs * direction without
     % assembling the dense observation Jacobian.
     incrementalAdjoint = eqn.tangent'\(-incrementalObservation);
-    product = G'*incrementalAdjoint+lambda*direction;
+    product = G'*incrementalAdjoint+alpha*(D'*(D*direction))+...
+        lambda*direction;
 end
 
 function check = verifyderivatives(q,u,eqn,G,gradient,dataObs,topWeight,...
-        dataNormSquared,pde,option,node,elem,bdFlag,xBeta,L,topDof)
+        dataNormSquared,pde,option,node,elem,bdFlag,xBeta,L,topDof,...
+        D,alpha)
     % A fixed smooth direction gives a deterministic regression-style check
     % of the tangent equation, adjoint gradient, and GN quadratic form.
     direction = sin((1:numel(q))');
@@ -512,9 +525,11 @@ function check = verifyderivatives(q,u,eqn,G,gradient,dataObs,topWeight,...
     plusResidual = uPlus(topDof)-dataObs;
     minusResidual = uMinus(topDof)-dataObs;
     plusObjective = 0.5*(topWeight'*(plusResidual.^2)) ...
-        /dataNormSquared;
+        /dataNormSquared+0.5*alpha*...
+        ((D*(q+epsilon*direction))'*(D*(q+epsilon*direction)));
     minusObjective = 0.5*(topWeight'*(minusResidual.^2)) ...
-        /dataNormSquared;
+        /dataNormSquared+0.5*alpha*...
+        ((D*(q-epsilon*direction))'*(D*(q-epsilon*direction)));
     finiteDifference = (plusObjective-minusObjective)/(2*epsilon);
     adjointDirection = gradient'*direction;
     relativeGradientError = abs(finiteDifference-adjointDirection)/...
@@ -528,14 +543,23 @@ function check = verifyderivatives(q,u,eqn,G,gradient,dataObs,topWeight,...
 
     tangentObservation = ...
         sqrt(topWeight/dataNormSquared).*incrementalState(topDof);
+    tangentRegularization = sqrt(alpha)*(D*direction);
     finiteDifferenceObservation = ...
         sqrt(topWeight/dataNormSquared).*...
         (uPlus(topDof)-uMinus(topDof))/(2*epsilon);
+    finiteDifferenceRegularization = ...
+        sqrt(alpha)*(D*(q+epsilon*direction)...
+        -D*(q-epsilon*direction))/(2*epsilon);
     relativeGaussNewtonError = abs(...
         tangentObservation'*tangentObservation-...
-        finiteDifferenceObservation'*finiteDifferenceObservation)/...
+        finiteDifferenceObservation'*finiteDifferenceObservation+...
+        tangentRegularization'*tangentRegularization-...
+        finiteDifferenceRegularization'*finiteDifferenceRegularization)/...
         max([eps,tangentObservation'*tangentObservation,...
-             finiteDifferenceObservation'*finiteDifferenceObservation]);
+             finiteDifferenceObservation'*finiteDifferenceObservation,...
+             tangentRegularization'*tangentRegularization,...
+             finiteDifferenceRegularization'*...
+             finiteDifferenceRegularization]);
 
     check.stateError = relativeStateError;
     check.gradientError = relativeGradientError;
@@ -635,4 +659,30 @@ function param = phgismparameters()
             -param.ARRHENIUS_Q1/(param.GAS_CONSTANT*param.ARRHENIUS_T));
     end
     param.A = flowRatePerSecond*param.SEC_PER_YEAR;
+end
+
+function exportepsfigures(scriptName)
+    outputDir = fullfile(fileparts(mfilename('fullpath')),'output_eps',scriptName);
+    if ~exist(outputDir,'dir')
+        mkdir(outputDir);
+    end
+
+    figs = findall(0,'Type','figure');
+    if isempty(figs)
+        return;
+    end
+    figNumbers = arrayfun(@(fig) fig.Number,figs);
+    [~,order] = sort(figNumbers);
+    figs = figs(order);
+
+    for i = 1:numel(figs)
+        fig = figs(i);
+        if isgraphics(fig,'figure')
+            set(fig,'Renderer','painters');
+            filename = fullfile(outputDir,sprintf('%s_figure_%02d.eps',...
+                scriptName,fig.Number));
+            print(fig,filename,'-depsc','-vector');
+        end
+    end
+    fprintf('  exported EPS figures to %s\n',outputDir);
 end

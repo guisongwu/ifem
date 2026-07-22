@@ -9,6 +9,16 @@ close all;
 clear variables;
 set(groot,'DefaultFigureVisible','on');
 
+scriptName = mfilename;
+outputDir = outputdirectory(scriptName);
+diaryFile = fullfile(outputDir,'console.txt');
+diary off;
+diary(diaryFile);
+diaryCleanup = onCleanup(@() diary('off'));
+fprintf('Console output will be saved to %s\n',diaryFile);
+
+try
+
 %% Geometry and mesh
 L = 5;
 W = 5;
@@ -334,7 +344,19 @@ set(gcf,'Visible','on');
 clf;
 plotsurfacefields(node,uRecovered,pRecovered,Nu,H,slope,L,W);
 sgtitle('recovered top-surface fields');
-exportepsfigures(mfilename);
+exportepsfigures(scriptName);
+fprintf('  saved console output to %s\n',diaryFile);
+diary off;
+clear diaryCleanup;
+
+catch exception
+    fprintf(2,'\nFullStokes3AdjInvSin failed. Console output saved to %s\n',...
+        diaryFile);
+    fprintf(2,'%s\n',getReport(exception,'extended','hyperlinks','off'));
+    diary off;
+    clear diaryCleanup;
+    rethrow(exception);
+end
 
 
 function node = maptosinbed(refnode,L,W,H,slope,bedAmplitude)
@@ -511,11 +533,15 @@ function value = defaultlinesearch()
     value = false;
 end
 
-function exportepsfigures(scriptName)
+function outputDir = outputdirectory(scriptName)
     outputDir = fullfile(fileparts(mfilename('fullpath')),'output',scriptName);
     if ~exist(outputDir,'dir')
         mkdir(outputDir);
     end
+end
+
+function exportepsfigures(scriptName)
+    outputDir = outputdirectory(scriptName);
 
     figs = findall(0,'Type','figure');
     if isempty(figs)
